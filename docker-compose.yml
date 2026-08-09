@@ -1,0 +1,23 @@
+# Local PostgreSQL for development. Production deployments should point
+# DATABASE_URL at a managed instance instead.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wikiframes-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wikiframes
+      POSTGRES_PASSWORD: wikiframes
+      POSTGRES_DB: wikiframes
+    ports:
+      - '5432:5432'
+    volumes:
+      - wikiframes-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U wikiframes -d wikiframes']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  wikiframes-pgdata:

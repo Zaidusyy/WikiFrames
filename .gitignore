@@ -1,0 +1,76 @@
+# ── dependencies ────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+.yarn/
+
+# ── next.js build output ────────────────────────────────────────────────────
+.next/
+out/
+build/
+dist/
+next-env.d.ts
+
+# ── environment & secrets (never commit these) ──────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+.oauth-consumer.json
+
+# ── local object storage (participant images live here in dev) ──────────────
+.storage/
+storage/
+uploads/
+tmp/
+*.zip
+
+# ── database ────────────────────────────────────────────────────────────────
+# Local embedded-postgres cluster created by `npm run dev:db`
+.pgdata/
+*.sqlite
+*.sqlite3
+*.db
+prisma/dev.db*
+prisma/migrations/dev/
+
+# ── logs & diagnostics ──────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+coverage/
+.nyc_output/
+
+# ── caches & tooling ────────────────────────────────────────────────────────
+.eslintcache
+.turbo/
+.vercel/
+.cache/
+.parcel-cache/
+*.tsbuildinfo
+
+# ── editors & OS cruft ──────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── internal specification ──────────────────────────────────────────────────
+# The product spec stays private and out of the published repository.
+docs/
+*_PDR.md
+
+# Local dev server logs written by the run scripts
+.next-dev.log
+.pgdata-server.log

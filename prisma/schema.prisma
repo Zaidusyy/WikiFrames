@@ -1,0 +1,278 @@
+// WikiFrames — PostgreSQL schema (PDR §19).
+// Every model carries id/created_at/updated_at. JSONB is used for canvas layer
+// state and analytics meta so the relational core stays clean.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────── users & sessions
+
+enum Capacity {
+  organizer
+  participant
+  contributor
+  co_team
+}
+
+enum PlatformRole {
+  organizer
+  super_admin
+}
+
+enum WallStatus {
+  pending
+  approved
+  hidden
+}
+
+model User {
+  id           String       @id @default(uuid())
+  wikiUserId   BigInt       @unique @map("wiki_user_id")
+  wikiUsername String       @map("wiki_username")
+  userPageUrl  String?      @map("user_page_url")
+  userGroup    String?      @map("user_group")
+  capacity     Capacity     @default(organizer)
+  logoAssetId  String?      @map("logo_asset_id")
+  wallOptIn    Boolean      @default(false) @map("wall_opt_in")
+  wallStatus   WallStatus   @default(pending) @map("wall_status")
+  role         PlatformRole @default(organizer)
+  onboardedAt  DateTime?    @map("onboarded_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  logo      Asset?           @relation("UserLogo", fields: [logoAssetId], references: [id])
+  campaigns Campaign[]
+  templates Template[]
+  sessions  Session[]
+  memberOf  CampaignMember[]
+
+  @@index([wallOptIn, wallStatus])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// ──────────────────────────────────────────────────────────────── campaigns
+
+enum CampaignStatus {
+  draft
+  active
+  inactive
+  cancelled
+  ended
+}
+
+model Campaign {
+  id                   String         @id @default(uuid())
+  ownerId              String         @map("owner_id")
+  name                 String
+  slug                 String         @unique
+  description          String         @default("")
+  eventDate            DateTime       @map("event_date")
+  eventEndDate         DateTime       @map("event_end_date")
+  registrationOpenDate DateTime       @map("registration_open_date")
+  location             String?
+  organizingGroup      String?        @map("organizing_group")
+  status               CampaignStatus @default(draft)
+  publicGallery        Boolean        @default(false) @map("public_gallery")
+  linkToken            String         @unique @map("link_token")
+  accessCode           String?        @map("access_code")
+  roleRequired         Boolean        @default(false) @map("role_required")
+  purgeAt              DateTime?      @map("purge_at")
+  deletedAt            DateTime?      @map("deleted_at")
+  launchedAt           DateTime?      @map("launched_at")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  owner     User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members   CampaignMember[]
+  templates Template[]
+  roles     CampaignRole[]
+  captions  Caption[]
+  images    GeneratedImage[]
+  events    AnalyticsEvent[]
+
+  @@index([linkToken])
+  @@index([ownerId, status])
+  @@index([deletedAt])
+  @@map("campaigns")
+}
+
+model CampaignMember {
+  id         String   @id @default(uuid())
+  campaignId String   @map("campaign_id")
+  userId     String   @map("user_id")
+  memberRole String   @default("co_team") @map("member_role")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, userId])
+  @@map("campaign_members")
+}
+
+// ──────────────────────────────────────────────────────────────── templates
+
+enum TemplateSource {
+  canvas
+  upload
+  commons
+  platform_default
+}
+
+model Template {
+  id                  String         @id @default(uuid())
+  ownerId             String?        @map("owner_id")
+  campaignId          String?        @map("campaign_id")
+  name                String
+  source              TemplateSource
+  aspectRatio         String         @default("1:1") @map("aspect_ratio")
+  canvasJson          Json?          @map("canvas_json")
+  frameAssetId        String?        @map("frame_asset_id")
+  commonsUrl          String?        @map("commons_url")
+  commonsAttribution  Json?          @map("commons_attribution")
+  editable            Boolean        @default(true)
+  sortOrder           Int            @default(0) @map("sort_order")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  owner      User?            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  campaign   Campaign?        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  frameAsset Asset?           @relation("TemplateFrame", fields: [frameAssetId], references: [id])
+  images     GeneratedImage[]
+
+  @@index([ownerId])
+  @@index([campaignId])
+  @@map("templates")
+}
+
+model EventTemplatePreset {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  name            String
+  blurb           String   @default("")
+  theme           Json
+  defaultCaptions Json     @map("default_captions")
+  defaultRoles    Json     @map("default_roles")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("event_template_presets")
+}
+
+model CampaignRole {
+  id         String   @id @default(uuid())
+  campaignId String   @map("campaign_id")
+  label      String
+  icon       String?
+  sort       Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  campaign Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  images   GeneratedImage[]
+
+  @@index([campaignId, sort])
+  @@map("campaign_roles")
+}
+
+model Caption {
+  id          String   @id @default(uuid())
+  campaignId  String   @map("campaign_id")
+  text        String
+  hashtags    String   @default("")
+  isMandatory Boolean  @default(false) @map("is_mandatory")
+  sort        Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, sort])
+  @@map("captions")
+}
+
+// ─────────────────────────────────────────────────── generated images & assets
+
+model GeneratedImage {
+  id            String   @id @default(uuid())
+  campaignId    String   @map("campaign_id")
+  templateId    String?  @map("template_id")
+  roleId        String?  @map("role_id")
+  assetId       String   @map("asset_id")
+  consented     Boolean  @default(true)
+  deletionToken String   @unique @map("deletion_token")
+  expiresAt     DateTime @map("expires_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  campaign Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  template Template?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  role     CampaignRole? @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  asset    Asset         @relation(fields: [assetId], references: [id])
+
+  @@index([expiresAt])
+  @@index([campaignId, createdAt])
+  @@map("generated_images")
+}
+
+enum AssetKind {
+  frame
+  logo
+  qr
+  generated
+  artifact
+}
+
+model Asset {
+  id         String    @id @default(uuid())
+  storageKey String    @unique @map("storage_key")
+  mime       String
+  bytes      Int
+  width      Int?
+  height     Int?
+  kind       AssetKind
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  userLogos       User[]           @relation("UserLogo")
+  templateFrames  Template[]       @relation("TemplateFrame")
+  generatedImages GeneratedImage[]
+
+  @@map("assets")
+}
+
+// ───────────────────────────────────────────────────────────────── analytics
+
+model AnalyticsEvent {
+  id         String   @id @default(uuid())
+  campaignId String   @map("campaign_id")
+  kind       String
+  meta       Json?
+  ts         DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, ts])
+  @@map("analytics_events")
+}

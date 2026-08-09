@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens (§24 Phase 0). Wiki-inspired: familiar palette and typography,
+   original artwork only — see §23 on trademarks. */
+:root {
+  --wf-blue: #3366cc;
+  --wf-blue-dark: #2a4b8d;
+  --wf-ink: #202122;
+  --wf-slate: #54595d;
+  --wf-line: #c8ccd1;
+  --wf-paper: #f8f9fa;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  color: var(--wf-ink);
+  background: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Accessibility (§21 WCAG 2.1 AA): a visible focus ring everywhere, never
+   removed. The canvas editor leans on keyboard navigation by design (ED-3). */
+:focus-visible {
+  outline: 3px solid var(--wf-blue);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@layer components {
+  .wf-card {
+    @apply rounded-xl border border-wiki-line bg-white shadow-card;
+  }
+
+  .wf-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
+           transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .wf-btn-primary {
+    @apply wf-btn bg-wiki-blue text-white hover:bg-wiki-blue-dark;
+  }
+
+  .wf-btn-secondary {
+    @apply wf-btn border border-wiki-line bg-white text-wiki-ink hover:bg-wiki-paper;
+  }
+
+  .wf-btn-danger {
+    @apply wf-btn border border-rose-300 bg-white text-rose-700 hover:bg-rose-50;
+  }
+
+  .wf-input {
+    @apply w-full rounded-lg border border-wiki-line bg-white px-3 py-2.5 text-sm text-wiki-ink
+           placeholder:text-slate-400 focus:border-wiki-blue focus:outline-none focus:ring-2
+           focus:ring-wiki-blue/25;
+  }
+
+  .wf-label {
+    @apply mb-1.5 block text-sm font-semibold text-wiki-ink;
+  }
+
+  .wf-hint {
+    @apply mt-1.5 text-xs leading-relaxed text-wiki-slate;
+  }
+
+  .wf-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium
+           ring-1 transition-colors;
+  }
+
+  /* The inline explainer boxes CAP-3 asks for — used wherever a field needs a
+     sentence of "why does this exist". */
+  .wf-note {
+    @apply rounded-lg border border-wiki-blue/25 bg-wiki-blue-light px-4 py-3 text-sm
+           leading-relaxed text-wiki-blue-dark;
+  }
+}
+
+/* A soft checkerboard so a transparent cutout reads as transparent rather than
+   as a white shape, in the editor and in every frame preview. */
+.wf-checker {
+  background-image:
+    linear-gradient(45deg, #eaecf0 25%, transparent 25%),
+    linear-gradient(-45deg, #eaecf0 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #eaecf0 75%),
+    linear-gradient(-45deg, transparent 75%, #eaecf0 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

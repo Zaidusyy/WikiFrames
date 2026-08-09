@@ -1,0 +1,44 @@
+{
+  "name": "wikiframes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Campaign frame & banner generator for the Wikimedia ecosystem",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "dev:db": "node scripts/dev-db.mjs",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "node prisma/seed.js",
+    "db:studio": "prisma studio",
+    "purge": "node scripts/purge.js"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "archiver": "^7.0.1",
+    "fabric": "^6.4.3",
+    "next": "^15.0.3",
+    "qrcode": "^1.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@electric-sql/pglite-socket": "^0.2.7",
+    "@embedded-postgres/windows-x64": "^18.4.0-beta.17",
+    "autoprefixer": "^10.4.20",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^15.0.3",
+    "postcss": "^8.4.49",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.15"
+  }
+}
