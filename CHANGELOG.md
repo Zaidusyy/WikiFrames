@@ -54,6 +54,10 @@ uses [Semantic Versioning](https://semver.org/).
 - Analytics share breakdown under-counted beyond 5 000 events.
 - "Featured groups on the wall" counted every user.
 - Telegram share link.
+- `npm ci` failed on npm 10 (Node 20 and 22, used by CI and the Docker
+  image) because the lockfile lacked some optional dependencies.
+- The Docker image's database client targeted the wrong OpenSSL, so the
+  health check failed; fontconfig warned that it had no font cache.
 
 ### Security
 - Participant images are no longer readable by anyone holding their URL:

@@ -15,6 +15,11 @@ ARG NODE_VERSION=22
 FROM node:${NODE_VERSION}-bookworm-slim AS deps
 WORKDIR /app
 ENV CHECKPOINT_DISABLE=1 NEXT_TELEMETRY_DISABLED=1
+# Prisma picks its query engine by the OpenSSL it finds; without it here the
+# generated client targets the wrong OpenSSL and cannot load at runtime.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl \
+ && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 RUN npm ci --no-audit --no-fund
@@ -32,9 +37,13 @@ WORKDIR /app
 
 # Fonts for server-rendered role badges: Latin plus the scripts of the
 # movement's largest communities, and colour emoji (badges end in one).
+# Image layers keep whole-second timestamps, so round the font directories'
+# times before building the font cache, or fontconfig finds it stale at runtime.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       fonts-noto-core fonts-noto-color-emoji fonts-noto-cjk fontconfig openssl ca-certificates \
+ && find /usr/share/fonts -type d -exec touch -m -d "@$(date +%s)" {} + \
+ && fc-cache -f \
  && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production \
@@ -57,8 +66,13 @@ COPY --from=build --chown=wikiframes:wikiframes /app/scripts ./scripts
 COPY --from=build --chown=wikiframes:wikiframes /app/node_modules/prisma ./node_modules/prisma
 COPY --from=build --chown=wikiframes:wikiframes /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=build --chown=wikiframes:wikiframes /app/node_modules/.prisma ./node_modules/.prisma
+RUN mkdir -p /app/.cache && chown wikiframes:wikiframes /app/.cache
 
 USER wikiframes
+# sharp bundles its own fontconfig; build its font cache now so the first
+# badge renders fast and the server never warns about a missing cache.
+RUN node -e "require('sharp')({ text: { text: 'WikiFrames', rgba: true } }).png().toBuffer()" \
+ && fc-cache
 VOLUME ["/data"]
 EXPOSE 3000
 
