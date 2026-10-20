@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Icon from '@/components/Icon';
 
 /**
  * §18.3 — "They build with us".
@@ -60,9 +61,7 @@ export default function CommunityWall({ groups = [], galleries = [] }) {
           <ul className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {groups.slice(0, 12).map((group) => (
               <li key={group.id} className="wf-card flex items-center gap-3 p-4">
-                <span aria-hidden="true" className="text-xl">
-                  🎉
-                </span>
+                <Icon name="cdxIconUserGroup" className="text-wiki-blue" />
                 <p className="text-sm">
                   <a
                     href={group.userPageUrl || '#'}
@@ -78,7 +77,7 @@ export default function CommunityWall({ groups = [], galleries = [] }) {
             ))}
           </ul>
         ) : (
-          <p className="mt-10 rounded-xl border border-dashed border-wiki-line px-6 py-10 text-center text-sm text-wiki-slate">
+          <p className="mt-10 rounded border border-dashed border-wiki-line px-6 py-10 text-center text-sm text-wiki-slate">
             The wall is waiting for its first entry. Log in, tell us your user group, and you could
             be the one that starts it.
           </p>
@@ -93,7 +92,7 @@ export default function CommunityWall({ groups = [], galleries = [] }) {
                 <li key={gallery.id}>
                   <Link
                     href={`/gallery/${gallery.slug}`}
-                    className="wf-card block p-5 transition-shadow hover:shadow-lg"
+                    className="wf-card block p-5 transition-colors hover:border-wiki-blue"
                   >
                     <p className="font-bold">{gallery.name}</p>
                     <p className="mt-1 text-sm text-wiki-slate">

@@ -1,15 +1,18 @@
+import crypto from 'node:crypto';
 import { config } from './config';
-import { randomToken, sha256 } from './tokens';
+import { randomToken } from './tokens';
 
 // Wikimedia OAuth 2.0 (PDR §6.2) with PKCE. We request identity scope only —
 // SEC-1 forbids ever asking for wiki write permissions.
+
+const UPSTREAM_TIMEOUT_MS = 15000;
 
 export function redirectUri() {
   return `${config.baseUrl}/api/v1/auth/wikimedia/callback`;
 }
 
 export function buildAuthorizeUrl({ state, codeVerifier }) {
-  const challenge = base64url(sha256Bytes(codeVerifier));
+  const challenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
   const url = new URL(config.oauth.authorizeUrl);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', config.oauth.clientId);
@@ -33,46 +36,67 @@ export async function exchangeCode({ code, codeVerifier }) {
 
   const res = await fetch(config.oauth.tokenUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': config.userAgent,
+    },
     body,
     cache: 'no-store',
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`Wikimedia token exchange failed (${res.status})`);
   }
-  return res.json();
+  const data = await res.json();
+  if (!data?.access_token || typeof data.access_token !== 'string') {
+    throw new Error('Wikimedia token exchange returned no access token');
+  }
+  return data;
 }
 
+/**
+ * The identity we key accounts on is the *central user id* (`sub`), never the
+ * username: usernames can be renamed and later re-registered by someone else.
+ * A profile without a usable id is refused outright — falling back to a
+ * default id would let unrelated people land in the same account.
+ */
 export async function fetchProfile(accessToken) {
   const res = await fetch(config.oauth.profileUrl, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}`, 'User-Agent': config.userAgent },
     cache: 'no-store',
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Wikimedia profile fetch failed (${res.status})`);
   const data = await res.json();
-  // Meta-Wiki returns { sub, username, editcount, ... }; `sub` is the central id.
+  return parseProfile(data);
+}
+
+export function parseProfile(data) {
+  const rawId = data?.sub ?? data?.centralid;
+  const idText = typeof rawId === 'number' ? String(rawId) : String(rawId ?? '');
+  if (!/^[1-9]\d{0,18}$/.test(idText)) {
+    throw new Error('Wikimedia profile did not include a central user id');
+  }
+
+  const username = typeof data?.username === 'string' ? data.username.trim() : '';
+  if (!username || username.length > 255) {
+    throw new Error('Wikimedia profile did not include a username');
+  }
+
   return {
-    wikiUserId: BigInt(data.sub ?? data.userid ?? 0),
-    wikiUsername: data.username ?? data.name ?? 'Unknown',
+    wikiUserId: BigInt(idText),
+    wikiUsername: username,
     userPageUrl: `https://meta.wikimedia.org/wiki/User:${encodeURIComponent(
-      (data.username ?? '').replace(/ /g, '_')
+      username.replace(/ /g, '_')
     )}`,
   };
 }
 
 export function newCodeVerifier() {
+  // 43+ characters of [A-Za-z0-9-_], as RFC 7636 requires.
   return randomToken(32);
 }
 
 export function newState() {
   return randomToken(16);
-}
-
-function sha256Bytes(value) {
-  // sha256() returns hex; PKCE needs the raw digest bytes.
-  return Buffer.from(sha256(value), 'hex');
-}
-
-function base64url(buf) {
-  return buf.toString('base64url');
 }

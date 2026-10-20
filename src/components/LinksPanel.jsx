@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { api, copyToClipboard, downloadUrl } from '@/lib/client';
 import { formatDate } from '@/lib/format';
-import { Alert, Button, Explainer, StatusBadge, useToast } from '@/components/ui';
+import Icon from '@/components/Icon';
+import { Alert, Button, Explainer, StatusBadge, useConfirm, useToast } from '@/components/ui';
 
 // §13 — the Links & QR panel. LINK-2 (regenerate) and LINK-4 (QR download) are
 // the two actions organizers actually reach for at an event.
@@ -14,15 +15,16 @@ export default function LinksPanel({ campaign, initialUrl, initialQr, isOwner })
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [toast, setToast] = useToast();
+  const confirm = useConfirm();
 
   async function regenerate() {
-    if (
-      !window.confirm(
-        'This kills the current link and QR code immediately. Anything already printed or shared will stop working. Continue?'
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Regenerate the link and QR code?',
+      body: 'The current link and QR code stop working immediately. Anything already printed or shared will have to be replaced.',
+      confirmLabel: 'Regenerate',
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy(true);
     setError(null);
     try {
@@ -100,7 +102,7 @@ export default function LinksPanel({ campaign, initialUrl, initialQr, isOwner })
             </Explainer>
 
             {campaign.accessCode ? (
-              <p className="mt-4 rounded-lg bg-wiki-paper px-4 py-3 text-sm">
+              <p className="mt-4 rounded bg-wiki-paper px-4 py-3 text-sm">
                 Participants must also type the venue access code{' '}
                 <strong className="tracking-[0.3em]">{campaign.accessCode}</strong>. Put it on a
                 slide or the registration desk.
@@ -119,7 +121,7 @@ export default function LinksPanel({ campaign, initialUrl, initialQr, isOwner })
           </div>
 
           {isOwner ? (
-            <div className="wf-card border-rose-200 p-6">
+            <div className="wf-card border-wiki-error-border/40 p-6">
               <h2 className="font-serif text-xl">Regenerate the link</h2>
               <p className="mt-1 text-sm text-wiki-slate">
                 If the link leaked before your event, issue a new one. The old link and QR stop
@@ -138,20 +140,20 @@ export default function LinksPanel({ campaign, initialUrl, initialQr, isOwner })
           <img
             src={qr}
             alt={`QR code linking to the ${campaign.name} campaign`}
-            className="mx-auto mt-4 w-full max-w-[240px] rounded-lg border border-wiki-line"
+            className="mx-auto mt-4 w-full max-w-[240px] rounded border border-wiki-line"
           />
           <div className="mt-4 grid gap-2">
             <a
               href={downloadUrl(`/campaigns/${campaign.id}/qr?format=png`)}
               className="wf-btn-secondary justify-center"
             >
-              ⬇ Download PNG (1024px)
+              <Icon name="cdxIconDownload" size="sm" /> Download PNG (1024px)
             </a>
             <a
               href={downloadUrl(`/campaigns/${campaign.id}/qr?format=svg`)}
               className="wf-btn-secondary justify-center"
             >
-              ⬇ Download SVG (print)
+              <Icon name="cdxIconDownload" size="sm" /> Download SVG (print)
             </a>
           </div>
           <p className="mt-3 text-xs text-wiki-slate">

@@ -1,19 +1,23 @@
 import { prisma } from '@/lib/db';
-import { assertSameOrigin, badRequest, handler, ok } from '@/lib/api';
+import { assertSameOrigin, badRequest, handler, notFound, ok, readJson } from '@/lib/api';
 import { requireSuperAdmin } from '@/lib/session';
 import { assetUrl } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
+const STATUSES = ['pending', 'approved', 'hidden'];
+
 // WALL-3: nothing reaches the public landing page without a super admin saying
 // so — the queue is the spam and image-rights safeguard.
 export const GET = handler(async (req) => {
   await requireSuperAdmin();
-  const status = new URL(req.url).searchParams.get('status') || 'pending';
+  const requested = new URL(req.url).searchParams.get('status') || 'pending';
+  const status = requested === 'all' || STATUSES.includes(requested) ? requested : 'pending';
 
   const users = await prisma.user.findMany({
     where: { wallOptIn: true, ...(status === 'all' ? {} : { wallStatus: status }) },
     orderBy: { updatedAt: 'desc' },
+    take: 200,
     select: {
       id: true,
       wikiUsername: true,
@@ -36,12 +40,15 @@ export const GET = handler(async (req) => {
 export const PATCH = handler(async (req) => {
   assertSameOrigin(req);
   await requireSuperAdmin();
-  const { userId, wallStatus } = await req.json();
+  const { userId, wallStatus } = await readJson(req);
 
-  if (!userId) throw badRequest('Which entry?');
-  if (!['pending', 'approved', 'hidden'].includes(wallStatus)) {
+  if (!userId || typeof userId !== 'string') throw badRequest('Which entry?');
+  if (!STATUSES.includes(wallStatus)) {
     throw badRequest('Status must be pending, approved or hidden.');
   }
+
+  const existing = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!existing) throw notFound('That entry no longer exists.');
 
   const updated = await prisma.user.update({
     where: { id: userId },

@@ -27,20 +27,22 @@ async function main() {
     process.exit(2);
   }
 
-  const res = await fetch(`${baseUrl}/api/v1/cron/retention`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${secret}` },
-  });
+  // A big backlog is worked through in batches until nothing expired is left.
+  for (let round = 1; round <= 50; round += 1) {
+    const res = await fetch(`${baseUrl}/api/v1/cron/retention`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}` },
+    });
 
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    console.error(`[retention] cycle FAILED (${res.status})`, body);
-    process.exit(1);
-  }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error(`[retention] cycle FAILED (${res.status})`, body);
+      process.exit(1);
+    }
 
-  console.log(JSON.stringify(body, null, 2));
-  if (body.moreImagesPending) {
-    console.log('[retention] more images are queued — run again to finish the batch.');
+    console.log(JSON.stringify(body, null, 2));
+    if (!body.moreImagesPending) break;
+    console.log(`[retention] more images are queued — continuing (round ${round + 1}).`);
   }
 }
 

@@ -1,0 +1,8 @@
+# Campaign links and deletion links are private capabilities; never index them.
+User-agent: *
+Disallow: /c/
+Disallow: /i/
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /onboarding
+Allow: /

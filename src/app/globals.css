@@ -2,13 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens (§24 Phase 0). Wiki-inspired: familiar palette and typography,
-   original artwork only — see §23 on trademarks. */
+/* Design tokens follow Codex, the Wikimedia Design System — see
+   tailwind.config.js. Wiki-familiar look, original artwork only (§23). */
 :root {
   --wf-blue: #3366cc;
-  --wf-blue-dark: #2a4b8d;
+  --wf-blue-hover: #3056a9;
+  --wf-blue-dark: #233566;
   --wf-ink: #202122;
   --wf-slate: #54595d;
+  --wf-border: #a2a9b1;
   --wf-line: #c8ccd1;
   --wf-paper: #f8f9fa;
 }
@@ -27,57 +29,80 @@ body {
 /* Accessibility (§21 WCAG 2.1 AA): a visible focus ring everywhere, never
    removed. The canvas editor leans on keyboard navigation by design (ED-3). */
 :focus-visible {
-  outline: 3px solid var(--wf-blue);
+  outline: 2px solid var(--wf-blue);
   outline-offset: 2px;
-  border-radius: 2px;
 }
 
 @layer components {
+  /* Codex Card: a plain bordered surface. */
   .wf-card {
-    @apply rounded-xl border border-wiki-line bg-white shadow-card;
+    @apply rounded border border-wiki-line bg-white;
   }
 
+  /* Codex Button. Bold labels, 2px corners, 32px minimum target (44px on
+     touch-first screens via the padding below). */
   .wf-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
-           transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-[2.25rem] items-center justify-center gap-2 rounded border px-3 py-1.5 text-sm font-bold
+           transition-colors duration-100 disabled:cursor-not-allowed disabled:border-wiki-neutral
+           disabled:bg-wiki-neutral disabled:text-wiki-border;
   }
 
   .wf-btn-primary {
-    @apply wf-btn bg-wiki-blue text-white hover:bg-wiki-blue-dark;
+    @apply wf-btn border-wiki-blue bg-wiki-blue text-white hover:border-wiki-blue-hover hover:bg-wiki-blue-hover
+           active:border-wiki-blue-dark active:bg-wiki-blue-dark;
   }
 
   .wf-btn-secondary {
-    @apply wf-btn border border-wiki-line bg-white text-wiki-ink hover:bg-wiki-paper;
+    @apply wf-btn border-wiki-border bg-wiki-paper text-wiki-ink hover:bg-white active:bg-wiki-neutral;
+  }
+
+  .wf-btn-quiet {
+    @apply wf-btn border-transparent bg-transparent text-wiki-ink hover:bg-wiki-ink/5 active:bg-wiki-ink/10;
   }
 
   .wf-btn-danger {
-    @apply wf-btn border border-rose-300 bg-white text-rose-700 hover:bg-rose-50;
+    @apply wf-btn border-wiki-border bg-wiki-paper text-wiki-error hover:bg-white active:bg-wiki-neutral;
   }
 
+  .wf-btn-danger-primary {
+    @apply wf-btn border-wiki-error bg-wiki-error text-white hover:border-wiki-error-border hover:bg-wiki-error-border;
+  }
+
+  /* Codex TextInput. */
   .wf-input {
-    @apply w-full rounded-lg border border-wiki-line bg-white px-3 py-2.5 text-sm text-wiki-ink
-           placeholder:text-slate-400 focus:border-wiki-blue focus:outline-none focus:ring-2
-           focus:ring-wiki-blue/25;
+    @apply w-full rounded border border-wiki-border bg-white px-2.5 py-2 text-sm text-wiki-ink
+           placeholder:text-wiki-muted focus:border-wiki-blue focus:outline-none focus:ring-1
+           focus:ring-inset focus:ring-wiki-blue disabled:bg-wiki-neutral disabled:text-wiki-muted;
   }
 
   .wf-label {
-    @apply mb-1.5 block text-sm font-semibold text-wiki-ink;
+    @apply mb-1 block text-sm font-bold text-wiki-ink;
   }
 
   .wf-hint {
-    @apply mt-1.5 text-xs leading-relaxed text-wiki-slate;
+    @apply mt-1 text-xs leading-relaxed text-wiki-slate;
   }
 
+  /* Codex InfoChip / selectable chip. */
   .wf-chip {
-    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium
            ring-1 transition-colors;
   }
 
-  /* The inline explainer boxes CAP-3 asks for — used wherever a field needs a
-     sentence of "why does this exist". */
+  /* Codex Message (notice). Used wherever a field needs a sentence of "why
+     does this exist" (CAP-3). */
   .wf-note {
-    @apply rounded-lg border border-wiki-blue/25 bg-wiki-blue-light px-4 py-3 text-sm
-           leading-relaxed text-wiki-blue-dark;
+    @apply rounded border border-wiki-blue/40 bg-wiki-blue-light px-4 py-3 text-sm
+           leading-relaxed text-wiki-ink;
+  }
+
+  .wf-tab {
+    @apply -mb-px inline-flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-sm font-bold
+           text-wiki-slate hover:text-wiki-ink;
+  }
+
+  .wf-tab-active {
+    @apply border-wiki-blue text-wiki-blue;
   }
 }
 

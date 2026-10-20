@@ -3,7 +3,7 @@ import { requireUser } from '@/lib/session';
 import { assertOwnsTemplate } from '@/lib/authz';
 import { prisma, serializable } from '@/lib/db';
 import { assetUrl } from '@/lib/storage';
-import CanvasEditor from '@/components/CanvasEditor';
+import CanvasEditor from '@/components/editor/CanvasEditor';
 
 export const dynamic = 'force-dynamic';
 

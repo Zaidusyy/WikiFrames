@@ -1,0 +1,21 @@
+name: Feature idea
+description: Suggest something that would help your community's events.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would it help your community do?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could it work?
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: WikiFrames principles
+      options:
+        - label: It works without asking participants for an account or personal data.
+        - label: It keeps the privacy promise (consent first, deletion on schedule).

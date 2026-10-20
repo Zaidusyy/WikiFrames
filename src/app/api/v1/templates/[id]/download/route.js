@@ -38,12 +38,12 @@ export const GET = handler(async (req, { params }) => {
 
   // A canvas template that has been flattened already has its frame in storage;
   // otherwise we render the blank frame on the fly.
-  let framePng;
+  let framePng = null;
   if (template.frameAssetId) {
-    framePng = await getObject(
-      (await prisma.asset.findUnique({ where: { id: template.frameAssetId } })).storageKey
-    );
-  } else {
+    const asset = await prisma.asset.findUnique({ where: { id: template.frameAssetId } });
+    framePng = asset ? await getObject(asset.storageKey).catch(() => null) : null;
+  }
+  if (!framePng) {
     framePng = (await renderBlankFrame({
       aspectRatio: template.aspectRatio,
       cutout,

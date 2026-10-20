@@ -89,7 +89,7 @@ export default function CampaignCaptions({ campaign, onChange, onToast, onError 
               </Field>
 
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className={over ? 'font-semibold text-amber-700' : 'text-wiki-slate'}>
+                <span className={over ? 'font-bold text-wiki-warning' : 'text-wiki-slate'}>
                   {preview.length} characters with badge and hashtags
                   {over ? ` — over X’s ${X_LIMIT} limit, fine elsewhere` : ''}
                 </span>
@@ -97,7 +97,7 @@ export default function CampaignCaptions({ campaign, onChange, onToast, onError 
                   <button
                     type="button"
                     onClick={() => setCaptions((c) => c.filter((_, i) => i !== index))}
-                    className="font-medium text-rose-700 hover:underline"
+                    className="font-bold text-wiki-error hover:underline"
                   >
                     Remove this caption
                   </button>

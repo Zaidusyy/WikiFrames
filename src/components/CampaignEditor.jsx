@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { api } from '@/lib/client';
 import { toDateTimeLocal, formatDate } from '@/lib/format';
-import { Alert, Button, Explainer, Field, StatusBadge, cx, useToast } from '@/components/ui';
+import Icon from '@/components/Icon';
+import { Alert, Button, Explainer, Field, StatusBadge, cx, useConfirm, useToast } from '@/components/ui';
 import CampaignTemplates from '@/components/CampaignTemplates';
 import CampaignRoles from '@/components/CampaignRoles';
 import CampaignCaptions from '@/components/CampaignCaptions';
@@ -54,8 +55,8 @@ export default function CampaignEditor({ campaign: initial, access, initialStep,
 
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <Link href="/dashboard/campaigns" className="text-sm font-semibold text-wiki-blue hover:underline">
-            ← Campaigns
+          <Link href="/dashboard/campaigns" className="inline-flex items-center gap-1 text-sm font-bold text-wiki-blue hover:underline">
+            <Icon name="cdxIconArrowPrevious" size="sm" /> Campaigns
           </Link>
           <h1 className="mt-2 flex flex-wrap items-center gap-3 font-serif text-3xl">
             {campaign.name}
@@ -69,13 +70,13 @@ export default function CampaignEditor({ campaign: initial, access, initialStep,
 
         <div className="flex flex-wrap gap-2">
           <Link href={`/dashboard/campaigns/${campaign.id}/links`} className="wf-btn-secondary">
-            🔗 Links &amp; QR
+            <Icon name="cdxIconQrCode" size="sm" /> Links &amp; QR
           </Link>
           <Link href={`/dashboard/campaigns/${campaign.id}/gallery`} className="wf-btn-secondary">
-            🖼️ Gallery
+            <Icon name="cdxIconImageGallery" size="sm" /> Gallery
           </Link>
           <Link href={`/dashboard/campaigns/${campaign.id}/analytics`} className="wf-btn-secondary">
-            📊 Analytics
+            <Icon name="cdxIconChart" size="sm" /> Analytics
           </Link>
         </div>
       </header>
@@ -259,7 +260,7 @@ function DetailsForm({ campaign, onSaved, onToast, onError }) {
         </Field>
       </div>
 
-      <label className="flex cursor-pointer gap-3 rounded-lg border border-wiki-line p-4 hover:bg-wiki-paper">
+      <label className="flex cursor-pointer gap-3 rounded border border-wiki-line p-4 hover:bg-wiki-paper">
         <input
           type="checkbox"
           className="mt-1"
@@ -298,7 +299,11 @@ function DetailsForm({ campaign, onSaved, onToast, onError }) {
 }
 
 function ReviewPanel({ campaign, isOwner, onLifecycle, onGoTo }) {
+  const confirm = useConfirm();
   const mandatory = campaign.captions?.find((c) => c.isMandatory);
+  // The Frame Health Check result each template was last saved with.
+  const unhealthy = (campaign.templates || []).filter((t) => t.canvasJson?.health?.errors > 0);
+  const warned = (campaign.templates || []).filter((t) => !t.canvasJson?.health?.errors && t.canvasJson?.health?.warnings > 0);
   const checks = [
     {
       ok: Boolean(campaign.name && campaign.description),
@@ -321,6 +326,17 @@ function ReviewPanel({ campaign, isOwner, onLifecycle, onGoTo }) {
       label: 'Mandatory caption set',
       fix: 'captions',
     },
+    {
+      ok: unhealthy.length === 0,
+      // Advice, not a gate: the organizer decides.
+      optional: true,
+      label: unhealthy.length
+        ? `Frame Health Check found problems in ${unhealthy.map((t) => `“${t.name}”`).join(', ')}`
+        : warned.length
+          ? `Frames pass the Health Check, with tips for ${warned.length} template${warned.length === 1 ? '' : 's'}`
+          : 'Frames pass the Health Check',
+      fix: 'templates',
+    },
   ];
 
   const ready = checks.every((c) => c.ok || c.optional);
@@ -332,14 +348,17 @@ function ReviewPanel({ campaign, isOwner, onLifecycle, onGoTo }) {
         <ul className="mt-4 space-y-2 text-sm">
           {checks.map((check) => (
             <li key={check.label} className="flex items-center gap-3">
-              <span aria-hidden="true" className={check.ok ? 'text-wiki-green' : 'text-rose-600'}>
-                {check.ok ? '✓' : '✗'}
-              </span>
-              <span className={cx('flex-1', !check.ok && 'text-rose-700')}>{check.label}</span>
+              <Icon
+                name={check.ok ? 'cdxIconSuccess' : 'cdxIconError'}
+                size="sm"
+                className={check.ok ? 'text-wiki-success' : 'text-wiki-error'}
+                label={check.ok ? 'Done' : 'Needs attention'}
+              />
+              <span className={cx('flex-1', !check.ok && 'text-wiki-error')}>{check.label}</span>
               <button
                 type="button"
                 onClick={() => onGoTo(check.fix)}
-                className="text-xs font-semibold text-wiki-blue hover:underline"
+                className="text-xs font-bold text-wiki-blue hover:underline"
               >
                 {check.ok ? 'Review' : 'Fix'}
               </button>
@@ -357,37 +376,39 @@ function ReviewPanel({ campaign, isOwner, onLifecycle, onGoTo }) {
 
         <div className="mt-5 flex flex-wrap gap-3">
           {campaign.status === 'draft' ? (
-            <Button disabled={!ready} onClick={() => onLifecycle('launch', 'Campaign launched! 🎉')}>
-              🚀 Launch campaign
+            <Button disabled={!ready} onClick={() => onLifecycle('launch', 'Campaign launched!')} icon="cdxIconPlay">
+              Launch campaign
             </Button>
           ) : null}
 
           {campaign.status === 'active' ? (
             <Button
               variant="secondary"
+              icon="cdxIconPause"
               onClick={() => onLifecycle('pause', 'Campaign paused.')}
             >
-              ⏸ Pause campaign
+              Pause campaign
             </Button>
           ) : null}
 
           {campaign.status === 'inactive' ? (
-            <Button onClick={() => onLifecycle('resume', 'Campaign is live again.')}>
-              ▶ Resume campaign
+            <Button icon="cdxIconPlay" onClick={() => onLifecycle('resume', 'Campaign is live again.')}>
+              Resume campaign
             </Button>
           ) : null}
 
           {isOwner && ['draft', 'active', 'inactive'].includes(campaign.status) ? (
             <Button
               variant="danger"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    'Cancelling kills the participant link immediately. Stored images stay until their normal deletion date. Continue?'
-                  )
-                ) {
-                  onLifecycle('cancel', 'Campaign cancelled — the link is dead.');
-                }
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'Cancel this campaign?',
+                  body: 'The participant link stops working immediately and cannot be revived. Stored images stay until their normal deletion date.',
+                  confirmLabel: 'Cancel campaign',
+                  cancelLabel: 'Keep it running',
+                  destructive: true,
+                });
+                if (ok) onLifecycle('cancel', 'Campaign cancelled — the link is dead.');
               }}
             >
               Cancel campaign
@@ -399,7 +420,7 @@ function ReviewPanel({ campaign, isOwner, onLifecycle, onGoTo }) {
       {campaign.status !== 'draft' ? (
         <div className="wf-card p-6">
           <h3 className="font-bold">Participant link</h3>
-          <p className="mt-1 break-all rounded-lg bg-wiki-paper px-3 py-2 font-mono text-sm">
+          <p className="mt-1 break-all rounded bg-wiki-paper px-3 py-2 font-mono text-sm">
             {campaign.participantUrl}
           </p>
           <Link

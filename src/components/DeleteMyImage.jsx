@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import { formatDate } from '@/lib/format';
+import Icon from '@/components/Icon';
 import { Alert, Button, Spinner } from '@/components/ui';
 
 export default function DeleteMyImage({ token }) {
@@ -42,12 +43,10 @@ export default function DeleteMyImage({ token }) {
 
         {state === 'gone' ? (
           <div className="text-center">
-            <span aria-hidden="true" className="text-5xl">
-              ✅
-            </span>
+            <Icon name="cdxIconSuccess" size="xl" className="mx-auto text-wiki-success" />
             <h1 className="mt-4 font-serif text-2xl">Nothing to delete</h1>
             <p className="mt-3 leading-relaxed text-wiki-slate">
-              This image has already been deleted, or it reached its 30-day expiry and was removed
+              This image has already been deleted, or it reached its expiry date and was removed
               automatically. Either way, we are not holding a copy.
             </p>
           </div>
@@ -55,9 +54,7 @@ export default function DeleteMyImage({ token }) {
 
         {state === 'deleted' ? (
           <div className="text-center">
-            <span aria-hidden="true" className="text-5xl">
-              🗑️
-            </span>
+            <Icon name="cdxIconTrash" size="xl" className="mx-auto text-wiki-slate" />
             <h1 className="mt-4 font-serif text-2xl">Deleted</h1>
             <p className="mt-3 leading-relaxed text-wiki-slate">
               Your image is gone from our servers and from the campaign gallery. The copy you
@@ -77,7 +74,7 @@ export default function DeleteMyImage({ token }) {
             <img
               src={data.image.url}
               alt="Your generated image"
-              className="mt-4 w-full rounded-lg border border-wiki-line"
+              className="mt-4 w-full rounded border border-wiki-line"
             />
 
             <p className="mt-4 text-sm leading-relaxed text-wiki-slate">

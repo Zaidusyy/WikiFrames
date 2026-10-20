@@ -1,5 +1,6 @@
 import { config } from './config';
 import { prisma } from './db';
+import { badRequest } from './errors';
 import { randomToken, slugify } from './tokens';
 
 // Campaign lifecycle rules (PDR §9.2) live here so the dashboard, the
@@ -12,6 +13,14 @@ export const LIFECYCLE = {
   CANCELLED: 'cancelled',
   ENDED: 'ended',
 };
+
+/** LINK-7: a venue access code is 4–6 digits, or nothing at all. */
+export function parseAccessCode(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const code = String(value).trim();
+  if (!/^\d{4,6}$/.test(code)) throw badRequest('An access code must be 4 to 6 digits.');
+  return code;
+}
 
 export function purgeDateFor(eventEndDate) {
   const end = new Date(eventEndDate);
@@ -151,19 +160,6 @@ export async function cloneCampaign(campaign, ownerId) {
 
     return copy;
   });
-}
-
-export function statusBadgeClass(status) {
-  return (
-    {
-      draft: 'bg-slate-100 text-slate-700 ring-slate-300',
-      active: 'bg-emerald-50 text-emerald-700 ring-emerald-300',
-      scheduled: 'bg-sky-50 text-sky-700 ring-sky-300',
-      inactive: 'bg-amber-50 text-amber-800 ring-amber-300',
-      cancelled: 'bg-rose-50 text-rose-700 ring-rose-300',
-      ended: 'bg-violet-50 text-violet-700 ring-violet-300',
-    }[status] || 'bg-slate-100 text-slate-700 ring-slate-300'
-  );
 }
 
 export function daysUntil(date) {

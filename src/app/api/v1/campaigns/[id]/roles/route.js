@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { assertSameOrigin, badRequest, handler, ok } from '@/lib/api';
+import { assertSameOrigin, badRequest, handler, ok, readJson } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { loadCampaignFor } from '@/lib/authz';
 
@@ -30,18 +30,19 @@ export const PUT = handler(async (req, { params }) => {
   const { id } = await params;
   const { campaign } = await loadCampaignFor(user, id);
 
-  const { roles } = await req.json();
+  const { roles } = await readJson(req);
   if (!Array.isArray(roles)) throw badRequest('Expected a list of roles.');
   if (roles.length > 40) throw badRequest('A campaign can offer at most 40 roles.');
 
   const cleaned = roles
-    .map((r, i) => ({
-      id: r.id || null,
-      label: String(r.label || '').trim().slice(0, 30),
-      icon: r.icon ? String(r.icon).slice(0, 8) : null,
-      sort: i,
+    .filter((r) => r && typeof r === 'object')
+    .map((r) => ({
+      id: typeof r.id === 'string' ? r.id : null,
+      label: String(r.label || '').replace(/\s+/g, ' ').trim().slice(0, 30),
+      icon: cleanIcon(r.icon),
     }))
-    .filter((r) => r.label);
+    .filter((r) => r.label)
+    .map((r, i) => ({ ...r, sort: i }));
 
   const existing = await prisma.campaignRole.findMany({ where: { campaignId: campaign.id } });
   const keepIds = new Set(cleaned.map((r) => r.id).filter(Boolean));
@@ -76,3 +77,13 @@ export const PUT = handler(async (req, { params }) => {
   });
   return ok({ roles: saved });
 });
+
+/**
+ * A badge icon is a short emoji, counted in code points — slicing UTF-16 units
+ * would cut a surrogate pair in half and store a broken character.
+ */
+function cleanIcon(value) {
+  if (typeof value !== 'string') return null;
+  const chars = Array.from(value.replace(/[\p{Cc}\s]/gu, '')).slice(0, 8);
+  return chars.length ? chars.join('') : null;
+}

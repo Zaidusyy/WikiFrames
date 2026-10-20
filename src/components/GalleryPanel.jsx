@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { api, downloadUrl } from '@/lib/client';
 import { formatDate } from '@/lib/format';
-import { Alert, Button, Spinner, cx, useToast } from '@/components/ui';
+import Icon from '@/components/Icon';
+import { Alert, Button, Spinner, cx, useConfirm, useToast } from '@/components/ui';
 
 // §17.1 — the admin gallery: images as they arrive, per-image and bulk export,
 // moderation removal, and RET-5's countdown on everything.
@@ -14,6 +15,7 @@ export default function GalleryPanel({ campaign }) {
   const [images, setImages] = useState([]);
   const [error, setError] = useState(null);
   const [toast, setToast] = useToast();
+  const confirm = useConfirm();
 
   const load = useCallback(
     async (nextCursor) => {
@@ -36,7 +38,13 @@ export default function GalleryPanel({ campaign }) {
   }, [load]);
 
   async function remove(image) {
-    if (!window.confirm('Remove this image from the gallery? This deletes it permanently.')) return;
+    const ok = await confirm({
+      title: 'Remove this image?',
+      body: 'It is deleted permanently, from the gallery and from storage. The participant’s own copy is not affected.',
+      confirmLabel: 'Delete image',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await api.del(`/campaigns/${campaign.id}/gallery/${image.id}`);
       setImages((current) => current.filter((i) => i.id !== image.id));
@@ -79,7 +87,7 @@ export default function GalleryPanel({ campaign }) {
             href={downloadUrl(`/campaigns/${campaign.id}/gallery/export`)}
             className="wf-btn-primary"
           >
-            ⬇ Download all (ZIP)
+            <Icon name="cdxIconDownload" size="sm" /> Download all (ZIP)
           </a>
         ) : null}
       </header>
@@ -90,10 +98,10 @@ export default function GalleryPanel({ campaign }) {
       {data?.retention ? (
         <div
           className={cx(
-            'rounded-lg border px-4 py-3 text-sm',
+            'rounded border px-4 py-3 text-sm text-wiki-ink',
             (data.retention.daysRemaining ?? 99) <= 7
-              ? 'border-amber-300 bg-amber-50 text-amber-900'
-              : 'border-wiki-blue/30 bg-wiki-blue-light text-wiki-blue-dark'
+              ? 'border-wiki-warning-border bg-wiki-warning-bg'
+              : 'border-wiki-blue/40 bg-wiki-blue-light'
           )}
         >
           <strong>{data.retention.notice}.</strong> After that they are permanently deleted from our
@@ -110,9 +118,7 @@ export default function GalleryPanel({ campaign }) {
         <Spinner label="Loading gallery…" />
       ) : images.length === 0 ? (
         <div className="wf-card p-12 text-center">
-          <span aria-hidden="true" className="text-4xl">
-            🖼️
-          </span>
+          <Icon name="cdxIconImageGallery" size="xl" className="mx-auto text-wiki-border" />
           <h2 className="mt-3 text-lg font-bold">No images yet</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-wiki-slate">
             Images appear here as participants create them — but only the ones whose creators ticked
@@ -143,7 +149,7 @@ export default function GalleryPanel({ campaign }) {
                   <p
                     className={cx(
                       'text-[11px] font-medium',
-                      image.daysRemaining <= 7 ? 'text-amber-700' : 'text-wiki-slate'
+                      image.daysRemaining <= 7 ? 'text-wiki-warning' : 'text-wiki-slate'
                     )}
                   >
                     Deletes in {image.daysRemaining} days
@@ -159,7 +165,7 @@ export default function GalleryPanel({ campaign }) {
                     <button
                       type="button"
                       onClick={() => remove(image)}
-                      className="rounded border border-rose-300 px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
+                      className="rounded border border-wiki-border px-2 py-1 text-[11px] font-bold text-wiki-error hover:bg-wiki-error-bg"
                     >
                       Remove
                     </button>

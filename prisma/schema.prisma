@@ -53,6 +53,7 @@ model User {
   memberOf  CampaignMember[]
 
   @@index([wallOptIn, wallStatus])
+  @@index([wikiUsername])
   @@map("users")
 }
 
@@ -163,6 +164,7 @@ model Template {
 
   @@index([ownerId])
   @@index([campaignId])
+  @@index([frameAssetId])
   @@map("templates")
 }
 
@@ -233,6 +235,7 @@ model GeneratedImage {
 
   @@index([expiresAt])
   @@index([campaignId, createdAt])
+  @@index([assetId])
   @@map("generated_images")
 }
 
@@ -252,6 +255,9 @@ model Asset {
   width      Int?
   height     Int?
   kind       AssetKind
+  // Who uploaded it — set for artwork imported into the canvas editor, so
+  // quotas can be applied per organizer. Never set for participant images.
+  ownerId    String?   @map("owner_id")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
@@ -259,6 +265,8 @@ model Asset {
   templateFrames  Template[]       @relation("TemplateFrame")
   generatedImages GeneratedImage[]
 
+  @@index([kind, createdAt])
+  @@index([ownerId, kind])
   @@map("assets")
 }
 
@@ -268,11 +276,15 @@ model AnalyticsEvent {
   id         String   @id @default(uuid())
   campaignId String   @map("campaign_id")
   kind       String
+  // Share target for share_tap events ("whatsapp", "native"…). A real column
+  // rather than a JSON path so it can be grouped inside the database.
+  platform   String?
   meta       Json?
   ts         DateTime @default(now())
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId, ts])
+  @@index([campaignId, kind])
   @@map("analytics_events")
 }

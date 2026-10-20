@@ -2,26 +2,27 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
+import Icon from '@/components/Icon';
 import { cx } from '@/components/ui';
 import { WikiFramesMark } from '@/components/LandingHeader';
 
 // §8.1 — the CRM layout: persistent left nav, top bar, main content area.
 const NAV = [
-  { href: '/dashboard', icon: '🏠', label: 'Overview', exact: true },
-  { href: '/dashboard/campaigns', icon: '📢', label: 'Campaigns' },
-  { href: '/dashboard/templates', icon: '🎨', label: 'Templates' },
-  { href: '/dashboard/event-templates', icon: '🧩', label: 'Event Templates' },
-  { href: '/dashboard/gallery', icon: '🖼️', label: 'Gallery' },
-  { href: '/dashboard/links', icon: '🔗', label: 'Links & QR' },
-  { href: '/dashboard/team', icon: '👥', label: 'Team' },
-  { href: '/dashboard/settings', icon: '⚙️', label: 'Settings' },
+  { href: '/dashboard', icon: 'cdxIconHome', label: 'Overview', exact: true },
+  { href: '/dashboard/campaigns', icon: 'cdxIconCalendar', label: 'Campaigns' },
+  { href: '/dashboard/templates', icon: 'wfIconFrame', label: 'Templates' },
+  { href: '/dashboard/event-templates', icon: 'cdxIconLayout', label: 'Event templates' },
+  { href: '/dashboard/gallery', icon: 'cdxIconImageGallery', label: 'Gallery' },
+  { href: '/dashboard/links', icon: 'cdxIconQrCode', label: 'Links & QR' },
+  { href: '/dashboard/team', icon: 'cdxIconUserGroup', label: 'Team' },
+  { href: '/dashboard/settings', icon: 'cdxIconSettings', label: 'Settings' },
 ];
 
 const SUPER_ADMIN_NAV = [
-  { href: '/dashboard/admin/wall', icon: '🛡️', label: 'Community wall' },
-  { href: '/dashboard/admin/overview', icon: '📊', label: 'Platform stats' },
+  { href: '/dashboard/admin/wall', icon: 'cdxIconFlag', label: 'Community wall' },
+  { href: '/dashboard/admin/overview', icon: 'cdxIconChart', label: 'Platform stats' },
 ];
 
 export default function DashboardShell({ user, children }) {
@@ -30,13 +31,40 @@ export default function DashboardShell({ user, children }) {
   // DASH-6: on mobile the side nav collapses into a drawer.
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const items = user.role === 'super_admin' ? [...NAV, ...SUPER_ADMIN_NAV] : NAV;
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    const onKey = (e) => e.key === 'Escape' && setDrawerOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawerOpen]);
+
+  const isAdmin = user.role === 'super_admin';
 
   async function logout() {
-    await api.post('/auth/logout', {});
+    await api.post('/auth/logout', {}).catch(() => {});
     router.push('/');
     router.refresh();
   }
+
+  const renderItem = (item) => {
+    const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+    return (
+      <li key={item.href}>
+        <Link
+          href={item.href}
+          onClick={() => setDrawerOpen(false)}
+          aria-current={active ? 'page' : undefined}
+          className={cx(
+            'flex items-center gap-3 rounded px-3 py-2 text-sm font-bold transition-colors',
+            active ? 'bg-wiki-blue-light text-wiki-blue' : 'text-wiki-slate hover:bg-wiki-paper hover:text-wiki-ink'
+          )}
+        >
+          <Icon name={item.icon} size="sm" />
+          {item.label}
+        </Link>
+      </li>
+    );
+  };
 
   return (
     <div className="flex min-h-screen bg-wiki-paper">
@@ -45,7 +73,7 @@ export default function DashboardShell({ user, children }) {
         <button
           type="button"
           aria-label="Close navigation"
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+          className="fixed inset-0 z-30 bg-wiki-ink/50 lg:hidden"
           onClick={() => setDrawerOpen(false)}
         />
       ) : null}
@@ -62,31 +90,13 @@ export default function DashboardShell({ user, children }) {
         </Link>
 
         <nav className="flex-1 overflow-y-auto p-3" aria-label="Dashboard">
-          <ul className="space-y-1">
-            {items.map((item) => {
-              const active = item.exact
-                ? pathname === item.href
-                : pathname.startsWith(item.href);
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={() => setDrawerOpen(false)}
-                    aria-current={active ? 'page' : undefined}
-                    className={cx(
-                      'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                      active
-                        ? 'bg-wiki-blue-light text-wiki-blue-dark'
-                        : 'text-wiki-slate hover:bg-wiki-paper hover:text-wiki-ink'
-                    )}
-                  >
-                    <span aria-hidden="true">{item.icon}</span>
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <ul className="space-y-0.5">{NAV.map(renderItem)}</ul>
+          {isAdmin ? (
+            <>
+              <p className="mb-1 mt-5 px-3 text-[11px] font-bold uppercase tracking-wide text-wiki-muted">Platform</p>
+              <ul className="space-y-0.5">{SUPER_ADMIN_NAV.map(renderItem)}</ul>
+            </>
+          ) : null}
         </nav>
 
         <div className="border-t border-wiki-line p-4">
@@ -95,21 +105,17 @@ export default function DashboardShell({ user, children }) {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={user.logoUrl} alt="" className="h-9 w-9 rounded object-contain" />
             ) : (
-              <span className="flex h-9 w-9 items-center justify-center rounded bg-wiki-blue-light text-sm font-bold text-wiki-blue">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-wiki-blue-light text-sm font-bold text-wiki-blue">
                 {user.wikiUsername.slice(0, 2).toUpperCase()}
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{user.wikiUsername}</p>
+              <p className="truncate text-sm font-bold">{user.wikiUsername}</p>
               <p className="truncate text-xs text-wiki-slate">{user.userGroup || 'No group set'}</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            className="mt-3 w-full rounded-lg border border-wiki-line px-3 py-2 text-sm font-medium text-wiki-slate hover:bg-wiki-paper"
-          >
-            Log out
+          <button type="button" onClick={logout} className="wf-btn-secondary mt-3 w-full">
+            <Icon name="cdxIconLogOut" size="sm" /> Log out
           </button>
         </div>
       </aside>
@@ -120,9 +126,10 @@ export default function DashboardShell({ user, children }) {
             type="button"
             onClick={() => setDrawerOpen(true)}
             aria-label="Open navigation"
-            className="rounded-lg border border-wiki-line px-3 py-2"
+            aria-expanded={drawerOpen}
+            className="wf-btn-secondary px-2"
           >
-            ☰
+            <Icon name="cdxIconMenu" />
           </button>
           <span className="font-serif text-lg font-bold">WikiFrames</span>
         </header>

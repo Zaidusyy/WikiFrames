@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import { formatDate } from '@/lib/format';
-import { Alert, Spinner, StatusBadge, cx, useToast } from '@/components/ui';
+import Icon from '@/components/Icon';
+import { Alert, Spinner, StatusBadge, cx, useConfirm, useToast } from '@/components/ui';
 
 const FILTERS = [
   ['all', 'All'],
@@ -25,6 +26,7 @@ export default function CampaignsList() {
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [toast, setToast] = useToast();
+  const confirm = useConfirm();
 
   const load = useCallback(async () => {
     try {
@@ -55,14 +57,14 @@ export default function CampaignsList() {
 
   async function remove(campaign) {
     // DASH-3: typed confirmation of the exact name, then a 7-day soft delete.
-    const typed = window.prompt(
-      `This deletes "${campaign.name}" and every image in it.\n\nYou have 7 days to change your mind, after which it cannot be recovered.\n\nType the campaign name exactly to confirm:`
-    );
-    if (typed === null) return;
-    if (typed !== campaign.name) {
-      setError('The name did not match — nothing was deleted.');
-      return;
-    }
+    const ok = await confirm({
+      title: 'Delete this campaign?',
+      body: 'This deletes the campaign, its link and every image in it. You have 7 days to change your mind, after which it cannot be recovered.',
+      typeToConfirm: campaign.name,
+      confirmLabel: 'Delete campaign',
+      destructive: true,
+    });
+    if (!ok) return;
     await act(
       campaign.id,
       () => api.del(`/campaigns/${campaign.id}?confirm=${encodeURIComponent(campaign.name)}`),
@@ -82,7 +84,7 @@ export default function CampaignsList() {
           </p>
         </div>
         <Link href="/dashboard/campaigns/new" className="wf-btn-primary">
-          + Create campaign
+          <Icon name="cdxIconAdd" size="sm" /> Create campaign
         </Link>
       </header>
 
@@ -251,7 +253,7 @@ function SmallButton({ onClick, children, danger }) {
       className={cx(
         'rounded border px-2.5 py-1 text-xs font-medium',
         danger
-          ? 'border-rose-300 text-rose-700 hover:bg-rose-50'
+          ? 'border-wiki-border text-wiki-error hover:bg-wiki-error-bg'
           : 'border-wiki-line hover:bg-wiki-paper'
       )}
     >

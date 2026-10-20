@@ -4,6 +4,7 @@ import { participantPayload, resolveCampaignByLink } from '@/lib/participant';
 import { serializable } from '@/lib/db';
 import { formatDateRange } from '@/lib/format';
 import ParticipantFlow from '@/components/ParticipantFlow';
+import Icon from '@/components/Icon';
 
 // AUTH-4: no login, no cookie. The token in the URL is the whole credential, so
 // this page must never be cached or statically rendered.
@@ -42,9 +43,11 @@ export default async function ParticipantPage({ params }) {
     return (
       <main id="main" className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-5 py-12">
         <div className="wf-card p-8 text-center">
-          <span aria-hidden="true" className="text-5xl">
-            {payload.state === 'ended' ? '🎉' : payload.state === 'inactive' ? '⏸️' : '🗓️'}
-          </span>
+          <Icon
+            name={payload.state === 'ended' ? 'cdxIconStar' : payload.state === 'inactive' ? 'cdxIconPause' : 'cdxIconCalendar'}
+            size="xl"
+            className="mx-auto text-wiki-blue"
+          />
           <h1 className="mt-4 font-serif text-2xl">{payload.stateCopy?.title}</h1>
           <p className="mt-3 leading-relaxed text-wiki-slate">{payload.stateCopy?.body}</p>
 

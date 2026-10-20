@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { api } from '@/lib/client';
-import { Alert, Button, Explainer, Field, useToast } from '@/components/ui';
+import { Alert, Button, Explainer, Field, useConfirm, useToast } from '@/components/ui';
 
 // §4.1 / SEC-7 — co-team members edit campaign content but can never delete or
 // cancel the campaign. The invite is by wiki username, matched against people
@@ -14,6 +14,7 @@ export default function TeamPanel({ campaign, owner, initialMembers, canInvite }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [toast, setToast] = useToast();
+  const confirm = useConfirm();
 
   async function invite(event) {
     event.preventDefault();
@@ -41,7 +42,13 @@ export default function TeamPanel({ campaign, owner, initialMembers, canInvite }
   }
 
   async function remove(member) {
-    if (!window.confirm(`Remove ${member.wikiUsername} from this campaign?`)) return;
+    const ok = await confirm({
+      title: `Remove ${member.wikiUsername}?`,
+      body: 'They will no longer be able to edit this campaign or see its gallery.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await api.del(`/campaigns/${campaign.id}/members?userId=${member.userId}`);
       setMembers((current) => current.filter((m) => m.userId !== member.userId));
@@ -91,7 +98,7 @@ export default function TeamPanel({ campaign, owner, initialMembers, canInvite }
                 <button
                   type="button"
                   onClick={() => remove(member)}
-                  className="text-xs font-medium text-rose-700 hover:underline"
+                  className="text-xs font-bold text-wiki-error hover:underline"
                 >
                   Remove
                 </button>

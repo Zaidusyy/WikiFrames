@@ -18,21 +18,24 @@ export const GET = handler(async (req) => {
   if (!config.devLoginEnabled) return fail(404, 'Not found');
 
   const url = new URL(req.url);
-  const username = (url.searchParams.get('username') || 'DevOrganizer').slice(0, 60);
+  const username =
+    (url.searchParams.get('username') || 'DevOrganizer').replace(/[^\p{L}\p{N} _.-]/gu, '').slice(0, 60) ||
+    'DevOrganizer';
   // Deterministic fake central id so repeated dev logins reuse one account.
   const wikiUserId = BigInt(
     900000000 + (Math.abs([...username].reduce((a, c) => a * 31 + c.charCodeAt(0), 7)) % 1000000)
   );
+  const role = config.superAdminUsernames.includes(username) ? 'super_admin' : 'organizer';
 
   const user = await prisma.user.upsert({
     where: { wikiUserId },
     create: {
       wikiUserId,
       wikiUsername: username,
-      userPageUrl: `https://meta.wikimedia.org/wiki/User:${encodeURIComponent(username)}`,
-      role: config.superAdminUsernames.includes(username) ? 'super_admin' : 'organizer',
+      userPageUrl: `https://meta.wikimedia.org/wiki/User:${encodeURIComponent(username.replace(/ /g, '_'))}`,
+      role,
     },
-    update: { wikiUsername: username },
+    update: { wikiUsername: username, role },
   });
 
   await createSession(user.id);

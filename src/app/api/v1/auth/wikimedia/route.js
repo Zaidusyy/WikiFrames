@@ -17,22 +17,16 @@ export const GET = handler(async () => {
   const state = newState();
   const codeVerifier = newCodeVerifier();
   const jar = await cookies();
-  const secure = config.baseUrl.startsWith('https://');
+  const options = {
+    httpOnly: true,
+    secure: config.cookies.secure,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 600,
+  };
 
-  jar.set('wf_oauth_state', state, {
-    httpOnly: true,
-    secure,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 600,
-  });
-  jar.set('wf_oauth_verifier', codeVerifier, {
-    httpOnly: true,
-    secure,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 600,
-  });
+  jar.set(config.cookies.oauthState, state, options);
+  jar.set(config.cookies.oauthVerifier, codeVerifier, options);
 
   return NextResponse.redirect(buildAuthorizeUrl({ state, codeVerifier }));
 });

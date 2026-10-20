@@ -1,9 +1,11 @@
-import { ASPECT_RATIOS } from '@/lib/config';
+import { config, ASPECT_RATIOS } from '@/lib/config';
 import { prisma } from '@/lib/db';
-import { assertSameOrigin, badRequest, handler, ok } from '@/lib/api';
+import { assertSameOrigin, badRequest, forbidden, handler, ok, readJson } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { assertOwnsTemplate, loadCampaignFor } from '@/lib/authz';
 import { assetUrl, destroyAsset } from '@/lib/storage';
+import { isFrameAssetInUse } from '@/lib/templates';
+import { sanitizeCanvasJson } from '@/lib/validate';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,30 +27,43 @@ export const PATCH = handler(async (req, { params }) => {
   const user = await requireUser();
   const { id } = await params;
   const template = await assertOwnsTemplate(user, id);
-  const body = await req.json();
+  const body = await readJson(req, config.limits.canvasJsonBytes + 64 * 1024);
 
   const data = {};
-  if (body.name !== undefined) data.name = String(body.name).slice(0, 80);
-  if (body.sortOrder !== undefined) data.sortOrder = Number(body.sortOrder) || 0;
+  if (body.name !== undefined) {
+    data.name = String(body.name).trim().slice(0, 80) || 'Untitled template';
+  }
+  if (body.sortOrder !== undefined) {
+    data.sortOrder = Math.max(0, Math.min(1000, Math.round(Number(body.sortOrder) || 0)));
+  }
 
-  if (body.aspectRatio !== undefined) {
-    if (!ASPECT_RATIOS[body.aspectRatio]) throw badRequest('Unsupported aspect ratio.');
+  if (body.aspectRatio !== undefined && body.aspectRatio !== template.aspectRatio) {
+    if (!Object.hasOwn(ASPECT_RATIOS, body.aspectRatio)) throw badRequest('Unsupported aspect ratio.');
+    // A flat frame is a fixed bitmap; it cannot change shape.
+    if (!template.editable) {
+      throw badRequest('This frame is a finished image, so its ratio cannot change. Upload a new one instead.');
+    }
     data.aspectRatio = body.aspectRatio;
   }
 
   if (body.canvasJson !== undefined) {
+    const incoming = sanitizeCanvasJson(body.canvasJson || {}, {
+      maxBytes: config.limits.canvasJsonBytes,
+    });
     if (!template.editable) {
       // §10.1 editing rule: a flat upload has no layers to write back to, but
       // overlay layers (text, artifacts, badge zone) are still allowed.
-      const incoming = body.canvasJson || {};
       data.canvasJson = {
         ...(template.canvasJson || {}),
-        overlays: incoming.overlays ?? [],
+        ...(incoming.fabric ? { fabric: incoming.fabric } : {}),
+        overlays: incoming.overlays ?? template.canvasJson?.overlays ?? [],
         badge: incoming.badge ?? template.canvasJson?.badge,
         cutout: incoming.cutout ?? template.canvasJson?.cutout,
+        credits: incoming.credits ?? template.canvasJson?.credits,
+        health: incoming.health ?? template.canvasJson?.health,
       };
     } else {
-      data.canvasJson = body.canvasJson;
+      data.canvasJson = incoming;
     }
   }
 
@@ -58,6 +73,18 @@ export const PATCH = handler(async (req, { params }) => {
       data.campaignId = null;
     } else {
       const { campaign } = await loadCampaignFor(user, String(body.campaignId));
+      if (campaign.id !== template.campaignId) {
+        // Moving a template into another campaign is the owner's call: a
+        // co-team member must not be able to carry someone else's design off
+        // into a campaign of their own.
+        if (template.ownerId !== user.id && user.role !== 'super_admin') {
+          throw forbidden('Only the template’s owner can move it to another campaign.');
+        }
+        const count = await prisma.template.count({ where: { campaignId: campaign.id } });
+        if (count >= config.limits.templatesPerCampaign) {
+          throw badRequest(`A campaign can hold at most ${config.limits.templatesPerCampaign} templates.`);
+        }
+      }
       data.campaignId = campaign.id;
     }
   }
@@ -80,11 +107,10 @@ export const DELETE = handler(async (req, { params }) => {
   }
 
   // Shared frame bytes: only reclaim them if nothing else points at the asset.
-  const frameAssetId = template.frameAssetId;
+  const candidates = [template.frameAssetId, template.canvasJson?.baseFrameAssetId].filter(Boolean);
   await prisma.template.delete({ where: { id: template.id } });
-  if (frameAssetId) {
-    const stillUsed = await prisma.template.count({ where: { frameAssetId } });
-    if (!stillUsed) await destroyAsset(frameAssetId);
+  for (const assetId of new Set(candidates)) {
+    if (!(await isFrameAssetInUse(assetId))) await destroyAsset(assetId);
   }
 
   return ok({ deleted: true });

@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { api, downloadUrl } from '@/lib/client';
-import { Button, Explainer, Field, cx } from '@/components/ui';
+import Icon from '@/components/Icon';
+import { Button, Explainer, Field, cx, useConfirm } from '@/components/ui';
 
 const RATIOS = [
   ['9:16', 'Story / Reel', 'h-24 w-[54px]'],
@@ -25,6 +26,7 @@ export default function CampaignTemplates({ campaign, onChange, onToast, onError
   const [library, setLibrary] = useState([]);
   const [adding, setAdding] = useState(null); // 'canvas' | 'upload' | 'commons' | 'library'
   const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
 
   useEffect(() => {
     api
@@ -129,7 +131,12 @@ export default function CampaignTemplates({ campaign, onChange, onToast, onError
   }
 
   async function detach(template) {
-    if (!window.confirm(`Remove "${template.name}" from this campaign?`)) return;
+    const ok = await confirm({
+      title: 'Remove from this campaign?',
+      body: `“${template.name}” stays in your template library and can be added back at any time.`,
+      confirmLabel: 'Remove',
+    });
+    if (!ok) return;
     onError(null);
     try {
       // Detaching, not deleting — CAMP-4 means the template stays in the library
@@ -154,7 +161,7 @@ export default function CampaignTemplates({ campaign, onChange, onToast, onError
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {templates.map((template) => (
             <li key={template.id} className="wf-card flex flex-col gap-3 p-4">
-              <div className="wf-checker flex items-center justify-center rounded-lg border border-wiki-line p-3">
+              <div className="wf-checker flex items-center justify-center rounded border border-wiki-line p-3">
                 {template.frameUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -189,20 +196,20 @@ export default function CampaignTemplates({ campaign, onChange, onToast, onError
                   href={downloadUrl(`/templates/${template.id}/download`)}
                   className="wf-btn-secondary justify-center px-2 py-2 text-xs"
                 >
-                  ⬇ Download
+                  <Icon name="cdxIconDownload" size="sm" /> Download
                 </a>
                 <Link
                   href={`/dashboard/templates/${template.id}/editor`}
                   className="wf-btn-primary justify-center px-2 py-2 text-xs"
                 >
-                  ✍ Write / Edit
+                  <Icon name="cdxIconEdit" size="sm" /> Edit
                 </Link>
               </div>
 
               <button
                 type="button"
                 onClick={() => detach(template)}
-                className="text-xs font-medium text-rose-700 hover:underline"
+                className="text-xs font-bold text-wiki-error hover:underline"
               >
                 Remove from campaign
               </button>
@@ -222,28 +229,28 @@ export default function CampaignTemplates({ campaign, onChange, onToast, onError
         <h3 className="font-serif text-xl">Add a template</h3>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <AddCard
-            icon="🖌️"
+            icon="cdxIconEdit"
             title="Design in canvas"
             body="Start blank or from one of six wiki-themed designs. Fully editable, forever."
             active={adding === 'canvas'}
             onClick={() => setAdding(adding === 'canvas' ? null : 'canvas')}
           />
           <AddCard
-            icon="⬆️"
+            icon="cdxIconUpload"
             title="Upload a frame"
             body="Made it in Canva or Figma? Upload the PNG with a transparent cutout."
             active={adding === 'upload'}
             onClick={() => setAdding(adding === 'upload' ? null : 'upload')}
           />
           <AddCard
-            icon="🌍"
+            icon="cdxIconGlobe"
             title="Link from Commons"
             body="Best option: host the frame on Commons and we fetch it with its licence."
             active={adding === 'commons'}
             onClick={() => setAdding(adding === 'commons' ? null : 'commons')}
           />
           <AddCard
-            icon="📚"
+            icon="wfIconLayers"
             title="Reuse from library"
             body="A template you built for an earlier event, ready to go again."
             active={adding === 'library'}
@@ -278,9 +285,7 @@ function AddCard({ icon, title, body, onClick, active }) {
         active ? 'border-wiki-blue bg-wiki-blue-light' : 'border-wiki-line hover:bg-wiki-paper'
       )}
     >
-      <span aria-hidden="true" className="text-2xl">
-        {icon}
-      </span>
+      <Icon name={icon} size="lg" className="text-wiki-blue" />
       <p className="mt-2 text-sm font-bold">{title}</p>
       <p className="mt-1 text-xs leading-relaxed text-wiki-slate">{body}</p>
     </button>
@@ -405,7 +410,7 @@ function UploadPanel({ busy, onUpload }) {
         </Field>
       </div>
 
-      <Field label="Frame file" hint="PNG or SVG, up to 10 MB.">
+      <Field label="Frame file" hint="PNG or SVG, up to 10 MB. WikiFrames finds the photo hole automatically.">
         <input
           type="file"
           accept="image/png,image/svg+xml"

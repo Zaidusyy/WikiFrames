@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/session';
 import { assetUrl } from '@/lib/storage';
 import { formatDate } from '@/lib/format';
+import Icon from '@/components/Icon';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Templates' };
@@ -44,9 +45,10 @@ export default async function TemplateLibraryPage() {
       />
 
       <div className="wf-note">
-        Want to design a frame in Canva or Figma instead? Open any template, hit{' '}
-        <strong>⬇ Download</strong>, and you get the frame PNG with the cutout punched out plus a
-        spec sheet of the exact measurements. Design around the hole, then upload it back.
+        Want to design a frame in Canva, Figma or Inkscape instead? Hit <strong>Download</strong>{' '}
+        on any template and you get the frame PNG with the cutout punched out plus a spec sheet of
+        the exact measurements. Design around the hole, then upload it back — WikiFrames finds the
+        hole for you.
       </div>
     </div>
   );
@@ -105,13 +107,13 @@ function Group({ title, templates, empty }) {
                   href={`/api/v1/templates/${template.id}/download`}
                   className="wf-btn-secondary justify-center px-2 py-2 text-xs"
                 >
-                  ⬇ Download
+                  <Icon name="cdxIconDownload" size="sm" /> Download
                 </a>
                 <Link
                   href={`/dashboard/templates/${template.id}/editor`}
                   className="wf-btn-primary justify-center px-2 py-2 text-xs"
                 >
-                  ✍ Write / Edit
+                  <Icon name="cdxIconEdit" size="sm" /> Edit
                 </Link>
               </div>
             </li>

@@ -1,11 +1,13 @@
-import { config, ASPECT_RATIOS } from '@/lib/config';
+import { config, ASPECT_RATIOS, ratioDims } from '@/lib/config';
 import { prisma } from '@/lib/db';
-import { assertSameOrigin, badRequest, handler, ok } from '@/lib/api';
+import { assertSameOrigin, badRequest, handler, ok, readForm, readJson } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { loadCampaignFor } from '@/lib/authz';
+import { enforce } from '@/lib/ratelimit';
 import { assetUrl, storeAsset } from '@/lib/storage';
-import { normalizeImageUpload, readUploadFile } from '@/lib/uploads';
+import { detectCutout, normalizeImageUpload, readUploadFile } from '@/lib/uploads';
 import { fetchCommonsFile } from '@/lib/commons';
+import { sanitizeCanvasJson } from '@/lib/validate';
 import { DEFAULT_TEMPLATES } from '@/lib/presets';
 
 export const dynamic = 'force-dynamic';
@@ -51,15 +53,21 @@ export const GET = handler(async (req) => {
 export const POST = handler(async (req) => {
   assertSameOrigin(req);
   const user = await requireUser();
+  enforce(`template-create:${user.id}`, 120);
   const contentType = req.headers.get('content-type') || '';
 
   // The request body can only be consumed once — read it once, then view the
   // text fields as a plain object while keeping the FormData for the file part.
-  const form = contentType.includes('multipart/form-data') ? await req.formData() : null;
-  const body = form ? Object.fromEntries(form.entries()) : await req.json();
+  const form = contentType.includes('multipart/form-data')
+    ? await readForm(req, config.limits.frameUploadBytes + 64 * 1024)
+    : null;
+  const body = form
+    ? Object.fromEntries([...form.entries()].filter(([, v]) => typeof v === 'string'))
+    : await readJson(req, config.limits.canvasJsonBytes);
 
   const aspectRatio = String(body.aspectRatio || '1:1');
-  if (!ASPECT_RATIOS[aspectRatio]) throw badRequest(`Unsupported aspect ratio "${aspectRatio}".`);
+  if (!Object.hasOwn(ASPECT_RATIOS, aspectRatio)) throw badRequest('Unsupported aspect ratio.');
+  const dims = ratioDims(aspectRatio);
 
   let campaignId = null;
   if (body.campaignId) {
@@ -74,6 +82,9 @@ export const POST = handler(async (req) => {
     campaignId = campaign.id;
   }
 
+  let canvasJson = sanitizeCanvasJson(parseCanvasJson(body.canvasJson), {
+    maxBytes: config.limits.canvasJsonBytes,
+  });
   let frameAssetId = null;
   let commonsUrl = null;
   let commonsAttribution = null;
@@ -82,10 +93,12 @@ export const POST = handler(async (req) => {
 
   if (body.commonsUrl) {
     // T4 via Commons (UP-2).
-    const file = await fetchCommonsFile(String(body.commonsUrl));
+    // Commons scales by width; ask for exactly the canvas width.
+    const file = await fetchCommonsFile(String(body.commonsUrl), { renderWidth: dims.w });
     const normalized = await normalizeImageUpload(file.buffer, {
-      maxBytes: config.limits.frameUploadBytes,
+      maxBytes: config.limits.commonsDownloadBytes,
       expectRatio: aspectRatio,
+      targetSize: dims,
     });
     const asset = await storeAsset({
       kind: 'frame',
@@ -100,6 +113,7 @@ export const POST = handler(async (req) => {
     source = 'commons';
     // The canvas cannot un-flatten a PNG — §10.1 editing rule.
     editable = false;
+    canvasJson = await withDetectedCutout(canvasJson, normalized.buffer, dims);
   } else if (form) {
     // T4 via direct upload.
     const buffer = await readUploadFile(form, 'frame', config.limits.frameUploadBytes);
@@ -108,6 +122,7 @@ export const POST = handler(async (req) => {
       allow: ['image/png', 'image/svg+xml'],
       requireTransparency: true,
       expectRatio: aspectRatio,
+      targetSize: dims,
     });
     const asset = await storeAsset({
       kind: 'frame',
@@ -119,26 +134,34 @@ export const POST = handler(async (req) => {
     frameAssetId = asset.id;
     source = 'upload';
     editable = false;
+    canvasJson = await withDetectedCutout(canvasJson, normalized.buffer, dims);
   }
 
   const template = await prisma.template.create({
     data: {
       ownerId: user.id,
       campaignId,
-      name: String(body.name || 'Untitled template').slice(0, 80),
+      name: String(body.name || 'Untitled template').trim().slice(0, 80) || 'Untitled template',
       source,
       aspectRatio,
-      canvasJson: parseCanvasJson(body.canvasJson),
+      canvasJson: canvasJson ?? undefined,
       frameAssetId,
       commonsUrl,
       commonsAttribution: commonsAttribution ?? undefined,
       editable,
-      sortOrder: Number(body.sortOrder || 0),
+      sortOrder: Math.max(0, Math.min(1000, Math.round(Number(body.sortOrder) || 0))),
     },
   });
 
   return ok({ template: decorate(template) }, { status: 201 });
 });
+
+/** A finished frame tells us where its hole is; believe it over the default. */
+async function withDetectedCutout(canvasJson, frameBuffer, dims) {
+  if (canvasJson?.cutout) return canvasJson;
+  const cutout = await detectCutout(frameBuffer, dims.w, dims.h).catch(() => null);
+  return cutout ? { ...(canvasJson || {}), cutout } : canvasJson;
+}
 
 function parseCanvasJson(value) {
   if (!value) return undefined;

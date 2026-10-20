@@ -74,3 +74,4 @@ docs/
 # Local dev server logs written by the run scripts
 .next-dev.log
 .pgdata-server.log
+*.err

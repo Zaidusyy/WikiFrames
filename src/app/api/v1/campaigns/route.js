@@ -1,11 +1,13 @@
 import { prisma } from '@/lib/db';
-import { assertSameOrigin, badRequest, handler, ok, requireFields } from '@/lib/api';
+import { assertSameOrigin, badRequest, handler, ok, readJson, requireFields } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { randomToken } from '@/lib/tokens';
-import { effectiveStatus, purgeDateFor, uniqueSlug } from '@/lib/campaigns';
+import { effectiveStatus, parseAccessCode, purgeDateFor, uniqueSlug } from '@/lib/campaigns';
 import { EVENT_PRESETS, SEEDED_ROLES } from '@/lib/presets';
 
 export const dynamic = 'force-dynamic';
+
+const STATUSES = new Set(['draft', 'active', 'inactive', 'cancelled', 'ended']);
 
 /** Campaigns the user owns plus the ones they were invited to co-run. */
 function visibleTo(user) {
@@ -24,7 +26,7 @@ export const GET = handler(async (req) => {
   const campaigns = await prisma.campaign.findMany({
     where: {
       ...visibleTo(user),
-      ...(status && status !== 'all' ? { status } : {}),
+      ...(status && STATUSES.has(status) ? { status } : {}),
     },
     orderBy: { updatedAt: 'desc' },
     include: {
@@ -73,7 +75,7 @@ export const GET = handler(async (req) => {
 export const POST = handler(async (req) => {
   assertSameOrigin(req);
   const user = await requireUser();
-  const body = await req.json();
+  const body = await readJson(req);
 
   requireFields(body, ['name', 'eventDate', 'eventEndDate']);
 
@@ -83,14 +85,19 @@ export const POST = handler(async (req) => {
     ? new Date(body.registrationOpenDate)
     : new Date();
 
-  if (Number.isNaN(eventDate.getTime()) || Number.isNaN(eventEndDate.getTime())) {
+  if (
+    Number.isNaN(eventDate.getTime()) ||
+    Number.isNaN(eventEndDate.getTime()) ||
+    Number.isNaN(registrationOpenDate.getTime())
+  ) {
     throw badRequest('Please provide valid event dates.');
   }
   if (eventEndDate < eventDate) {
     throw badRequest('The event end date must be on or after the event date.');
   }
 
-  const name = String(body.name).slice(0, 80);
+  const name = String(body.name).trim().slice(0, 80);
+  if (!name) throw badRequest('Give the campaign a name.');
   const slug = await uniqueSlug(name);
 
   const campaign = await prisma.campaign.create({
@@ -108,7 +115,7 @@ export const POST = handler(async (req) => {
         : user.userGroup,
       publicGallery: Boolean(body.publicGallery),
       roleRequired: Boolean(body.roleRequired),
-      accessCode: body.accessCode ? String(body.accessCode).slice(0, 6) : null,
+      accessCode: parseAccessCode(body.accessCode),
       linkToken: randomToken(16),
       purgeAt: purgeDateFor(eventEndDate),
     },

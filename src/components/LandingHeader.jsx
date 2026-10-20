@@ -28,18 +28,18 @@ export default function LandingHeader() {
         </Link>
 
         <nav className="flex items-center gap-1 sm:gap-4">
-          <a href="/#how-it-works" className="hidden px-2 py-1 text-sm font-medium text-wiki-slate hover:text-wiki-ink sm:block">
+          <Link href="/#how-it-works" className="hidden px-2 py-1 text-sm font-medium text-wiki-slate hover:text-wiki-ink sm:block">
             How it works
-          </a>
-          <a href="/#community" className="hidden px-2 py-1 text-sm font-medium text-wiki-slate hover:text-wiki-ink sm:block">
+          </Link>
+          <Link href="/#community" className="hidden px-2 py-1 text-sm font-medium text-wiki-slate hover:text-wiki-ink sm:block">
             Community
-          </a>
+          </Link>
           <Link href="/privacy" className="hidden px-2 py-1 text-sm font-medium text-wiki-slate hover:text-wiki-ink sm:block">
             Privacy
           </Link>
 
           {user === undefined ? (
-            <span className="h-9 w-28 animate-pulse rounded-lg bg-wiki-paper" aria-hidden="true" />
+            <span className="h-9 w-28 animate-pulse rounded bg-wiki-paper" aria-hidden="true" />
           ) : user ? (
             <Link href="/dashboard" className="wf-btn-primary">
               Dashboard
@@ -62,7 +62,7 @@ export default function LandingHeader() {
 export function WikiFramesMark({ size = 28 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" role="presentation">
-      <rect x="2" y="2" width="28" height="28" rx="6" fill="#3366cc" />
+      <rect x="2" y="2" width="28" height="28" rx="4" fill="#3366cc" />
       <rect x="7" y="7" width="18" height="18" rx="3" fill="none" stroke="#fff" strokeWidth="2" />
       <circle cx="16" cy="16" r="4.5" fill="#ffcc33" />
     </svg>

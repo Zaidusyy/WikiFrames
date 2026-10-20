@@ -5,6 +5,7 @@ import { assetUrl } from '@/lib/storage';
 import LandingHeader from '@/components/LandingHeader';
 import CommunityWall from '@/components/CommunityWall';
 import FrameDemo from '@/components/FrameDemo';
+import Icon from '@/components/Icon';
 
 // §5.3 / §18: statically generated with incremental revalidation — fast, SEO
 // friendly, and the community wall refreshes without a redeploy.
@@ -111,27 +112,25 @@ export default async function LandingPage() {
           <ol className="mt-12 grid gap-6 md:grid-cols-3">
             {[
               {
-                icon: '🎨',
+                icon: 'cdxIconEdit',
                 title: 'Create a campaign',
                 body: 'Pick an event template or design your own frame in the canvas editor. Add roles, captions and hashtags. No design skills needed.',
               },
               {
-                icon: '🔗',
+                icon: 'cdxIconQrCode',
                 title: 'Share the QR',
                 body: 'Every campaign gets a secure link and a print-quality QR code. Put it on the poster, in the group chat, on the registration desk.',
               },
               {
-                icon: '🚀',
+                icon: 'cdxIconShare',
                 title: 'Watch it spread',
                 body: 'Attendees add a photo, pick their badge, and share to social media with your caption already written. You get a gallery and the numbers.',
               },
             ].map((step, i) => (
               <li key={step.title} className="wf-card p-6">
                 <div className="mb-4 flex items-center gap-3">
-                  <span aria-hidden="true" className="text-3xl">
-                    {step.icon}
-                  </span>
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-wiki-blue text-sm font-bold text-white">
+                  <Icon name={step.icon} size="xl" className="text-wiki-blue" />
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-wiki-blue text-sm font-bold text-white" aria-hidden="true">
                     {i + 1}
                   </span>
                 </div>
@@ -148,17 +147,18 @@ export default async function LandingPage() {
             <h2 className="text-center font-serif text-3xl">Everything an organizer needs</h2>
             <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {[
-                ['🖌️', 'Canvas editor', 'Drag, nudge with arrow keys, add text and artwork. Movable photo cutouts in circle or square. Undo whenever you need it.'],
-                ['🧩', 'Event templates', 'Wikipedia Day, Wiki Loves Monuments, edit-a-thons, WikiClub meetups — start from a themed draft and edit it down.'],
-                ['📐', 'Every ratio', 'Stories at 9:16, feed posts at 4:5, squares at 1:1, landscape at 16:9. One campaign can offer all of them.'],
-                ['🏅', 'Personal badges', '“I’m a Heritage Documenter.” Participants pick a role and it lands on the image and in the caption.'],
-                ['📲', 'One-tap sharing', 'The image and the caption travel together into WhatsApp, Instagram, X or wherever they post.'],
-                ['🔒', '30-day promise', 'Stored only with consent, deleted permanently 30 days after the event. Say no and nothing is saved at all.'],
+                ['cdxIconLock', 'Photos stay on the phone', 'Unless a participant shares their image with the gallery, it is made on their own device — the photo is never uploaded.'],
+                ['cdxIconImageAdd', 'Wikimedia Commons built in', 'Search millions of free images inside the editor. Author and licence travel with every image, so credit is never forgotten.'],
+                ['cdxIconUniversalDesign', 'Frame Health Check', 'Catches unreadable text (WCAG contrast), content under the story UI, a badge over faces and missing licence credits — with one-click fixes.'],
+                ['cdxIconMagicWand', 'Magic resize', 'Design once, get the story, feed, square and landscape versions laid out for you — not stretched.'],
+                ['wfIconMagnet', 'A real design editor', 'Smart guides and snapping, alignment, layers, groups, safe zones, keyboard shortcuts and undo. Or upload a frame from Canva or Figma.'],
+                ['cdxIconTag', 'Personal badges', '“I’m a Heritage Documenter.” Participants pick a role and it lands on the image and in the caption.'],
+                ['cdxIconShare', 'One-tap sharing', 'The image and the caption travel together into WhatsApp, Instagram, Mastodon or wherever they post — with alt text ready.'],
+                ['cdxIconLayout', 'Event templates', 'Wikipedia Day, Wiki Loves Monuments, edit-a-thons, WikiClub meetups — start from a themed draft and edit it down.'],
+                ['cdxIconClock', '30-day promise', 'Stored only with consent, deleted permanently at most 30 days after the event, by a job that runs even if nobody set up cron.'],
               ].map(([icon, title, body]) => (
                 <div key={title} className="wf-card p-6">
-                  <span aria-hidden="true" className="text-2xl">
-                    {icon}
-                  </span>
+                  <Icon name={icon} size="lg" className="text-wiki-blue" />
                   <h3 className="mt-3 text-base font-bold">{title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-wiki-slate">{body}</p>
                 </div>
@@ -174,21 +174,21 @@ export default async function LandingPage() {
         <section id="privacy" className="border-t border-wiki-line bg-wiki-paper py-16">
           <div className="mx-auto max-w-3xl px-5">
             <h2 className="font-serif text-3xl">Our promise about your photo</h2>
-            <blockquote className="mt-6 border-l-4 border-wiki-blue bg-white p-6 text-base leading-relaxed text-wiki-ink shadow-card">
+            <blockquote className="mt-6 border-l-4 border-wiki-blue bg-white p-6 text-base leading-relaxed text-wiki-ink">
               <strong>How we handle your image:</strong> If you allow it, your generated image is
               stored so the event organizers can showcase it in the campaign gallery.{' '}
               <strong>
                 All stored images are kept for a maximum of 30 days after the event closes, then
                 permanently deleted from our servers.
               </strong>{' '}
-              If you don&apos;t allow storage, your image is generated one-time for you to download
-              and share — and nothing is saved on our side; it vanishes after your session.
+              If you don&apos;t allow storage, your image is created on your own device — your photo
+              is never uploaded, and nothing is saved on our side.
             </blockquote>
             <ul className="mt-6 space-y-2 text-sm text-wiki-slate">
               <li>• Participants never create an account and are never asked for personal details.</li>
               <li>• No cookies and no fingerprinting in the participant flow — only aggregate counters.</li>
+              <li>• Stored images are visible to the organizers and, only if they choose, a public gallery.</li>
               <li>• Every stored image comes with a private link that deletes it on the spot.</li>
-              <li>• Generated images are excluded from long-term backups, so the deletion is real.</li>
             </ul>
             <Link href="/privacy" className="mt-6 inline-block text-sm font-semibold text-wiki-blue underline">
               Read the full data promises →
@@ -209,8 +209,9 @@ function SiteFooter() {
         <div>
           <p className="font-serif text-xl font-bold">WikiFrames</p>
           <p className="mt-2 text-sm text-wiki-slate">
-            Campaign frames and banners for the Wikimedia ecosystem.
+            Privacy-first campaign frames for the Wikimedia movement and every open community.
           </p>
+          <p className="mt-2 text-xs text-wiki-slate">Free software under the MIT licence.</p>
         </div>
         <FooterColumn
           title="Product"

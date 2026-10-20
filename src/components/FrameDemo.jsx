@@ -31,10 +31,10 @@ export default function FrameDemo() {
       <div className="absolute -left-6 -top-6 h-24 w-24 rounded-full bg-wiki-amber/40 blur-2xl" aria-hidden="true" />
       <div className="absolute -bottom-8 -right-4 h-28 w-28 rounded-full bg-wiki-green/30 blur-2xl" aria-hidden="true" />
 
-      <figure className="relative overflow-hidden rounded-2xl border border-wiki-line bg-white shadow-card">
+      <figure className="relative overflow-hidden rounded-2xl border border-wiki-line bg-white shadow-float">
         <div className="relative aspect-square animate-floaty">
           {/* Stand-in for the participant's photo. */}
-          <div className="absolute inset-0 bg-gradient-to-br from-sky-200 via-indigo-200 to-violet-200" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#a7c7f9] to-[#c9b3ec]" />
           <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden="true">
             <defs>
               <mask id="wf-demo-cutout">
@@ -78,7 +78,7 @@ export default function FrameDemo() {
           <span>1:1 · square</span>
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-wiki-green" />
-            generated in 2.1s
+            made on your phone
           </span>
         </figcaption>
       </figure>

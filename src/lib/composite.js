@@ -1,68 +1,111 @@
 import sharp from 'sharp';
-import { ratioDims } from './config';
+import {
+  DEFAULT_BADGE,
+  DEFAULT_CUTOUT,
+  badgeLayout,
+  containRect,
+  cutoutRect,
+  intersectRect,
+  ratioDims,
+  sanitizePlacement,
+} from './geometry';
+import { DECODE_PIXEL_LIMIT } from './uploads';
 
 // Server-side compositing (PDR §5.3, §14.1 step 7).
 //
 // The canvas editor keeps its layer JSON for editing, but it also exports a
 // flattened frame PNG with a transparent cutout. That PNG is the single source
-// of truth here, which is what makes output identical across devices: the phone
-// preview and this renderer draw the same three things in the same order —
+// of truth here, which is what makes output identical across devices: this
+// renderer and the on-device one (compose-client.js) draw the same four things
+// in the same order, with the same geometry (geometry.js) —
 // photo → cutout mask → frame → badge.
+//
+// Performance notes. Every intermediate stays as raw pixels; the only encode
+// is the final one. The photo is cropped to the part that can actually show
+// through the cutout *before* it is resized. Frames are decoded once and kept
+// in a small LRU, because an event renders the same one or two frames for
+// every single participant.
+
+export { DEFAULT_BADGE, DEFAULT_CUTOUT, cutoutRect };
 
 const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
+const WHITE = { r: 255, g: 255, b: 255, alpha: 1 };
+const PHOTO_PIXEL_LIMIT = DECODE_PIXEL_LIMIT;
 
-export const DEFAULT_CUTOUT = { shape: 'circle', xPct: 0.5, yPct: 0.42, sizePct: 0.52 };
-export const DEFAULT_BADGE = { xPct: 0.5, yPct: 0.86, fontPct: 0.045 };
+const BADGE_FONT =
+  "system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', 'Noto Sans Devanagari', 'Noto Sans Bengali', 'Noto Sans Tamil', 'Noto Sans Arabic', 'Noto Color Emoji', sans-serif";
 
-function blankCanvas(width, height) {
-  return sharp({
-    create: { width, height, channels: 4, background: TRANSPARENT },
-  });
+/** Least-recently-used cache with a byte budget. */
+class ByteLru {
+  constructor(budgetBytes) {
+    this.budget = budgetBytes;
+    this.bytes = 0;
+    this.map = new Map();
+  }
+
+  get(key) {
+    const hit = this.map.get(key);
+    if (!hit) return undefined;
+    this.map.delete(key);
+    this.map.set(key, hit);
+    return hit.value;
+  }
+
+  set(key, value, bytes) {
+    if (bytes > this.budget) return;
+    if (this.map.has(key)) {
+      this.bytes -= this.map.get(key).bytes;
+      this.map.delete(key);
+    }
+    this.map.set(key, { value, bytes });
+    this.bytes += bytes;
+    for (const [oldKey, entry] of this.map) {
+      if (this.bytes <= this.budget) break;
+      this.map.delete(oldKey);
+      this.bytes -= entry.bytes;
+    }
+  }
+}
+
+const frameCache = (globalThis.__wikiframesFrameCache ??= new ByteLru(
+  Number(process.env.FRAME_CACHE_MB || 96) * 1024 * 1024
+));
+
+function blankCanvas(width, height, background = TRANSPARENT) {
+  return sharp({ create: { width, height, channels: 4, background } });
 }
 
 /**
- * Clips a layer to the canvas so sharp never sees a negative offset — which it
- * rejects, and which happens constantly when a participant zooms their photo
- * past the cutout edges.
+ * A frame, decoded and sized to the canvas, as raw RGBA. Cached by asset id,
+ * so on a hit the frame is not even read from storage.
  */
-async function placeOnCanvas(buffer, left, top, canvasWidth, canvasHeight) {
-  const meta = await sharp(buffer).metadata();
-  const srcLeft = Math.max(0, Math.round(-left));
-  const srcTop = Math.max(0, Math.round(-top));
-  const dstLeft = Math.max(0, Math.round(left));
-  const dstTop = Math.max(0, Math.round(top));
-  const width = Math.min(meta.width - srcLeft, canvasWidth - dstLeft);
-  const height = Math.min(meta.height - srcTop, canvasHeight - dstTop);
-  if (width <= 0 || height <= 0) return null;
+async function frameLayer({ frameBuffer, frameKey, loadFrameBuffer }, width, height) {
+  const key = frameKey ? `${frameKey}:${width}x${height}` : frameBuffer ? null : `fallback:${width}x${height}`;
+  const cached = key && frameCache.get(key);
+  if (cached) return cached;
 
-  const cropped =
-    srcLeft || srcTop || width !== meta.width || height !== meta.height
-      ? await sharp(buffer)
-          .extract({ left: srcLeft, top: srcTop, width, height })
-          .png()
-          .toBuffer()
-      : buffer;
-
-  return { input: cropped, left: dstLeft, top: dstTop };
+  const bytes = frameBuffer || (loadFrameBuffer ? await loadFrameBuffer() : null);
+  const source = bytes || fallbackFrameSvg(width, height);
+  const { data, info } = await sharp(source, { limitInputPixels: PHOTO_PIXEL_LIMIT })
+    .resize(width, height, { fit: 'fill' })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const layer = { data, raw: { width: info.width, height: info.height, channels: info.channels } };
+  if (key) frameCache.set(key, layer, data.length);
+  return layer;
 }
 
-function cutoutRect(cutout, width, height) {
-  const c = { ...DEFAULT_CUTOUT, ...(cutout || {}) };
-  const size = Math.round(Math.min(width, height) * (c.sizePct ?? DEFAULT_CUTOUT.sizePct));
-  const w = Math.round(c.widthPx ?? size);
-  const h = Math.round(c.heightPx ?? size);
-  const cx = Math.round((c.xPct ?? 0.5) * width);
-  const cy = Math.round((c.yPct ?? 0.5) * height);
-  return { shape: c.shape || 'circle', radius: c.radius ?? 0, x: cx - w / 2, y: cy - h / 2, w, h };
-}
-
-function maskSvg(rect, width, height) {
+/** The SVG that, composited with `dest-in`, keeps only pixels inside the hole. */
+function maskSvg(rect, region) {
+  const x = rect.x - region.x;
+  const y = rect.y - region.y;
   const shape =
     rect.shape === 'circle'
-      ? `<ellipse cx="${rect.x + rect.w / 2}" cy="${rect.y + rect.h / 2}" rx="${rect.w / 2}" ry="${rect.h / 2}" fill="#fff"/>`
-      : `<rect x="${rect.x}" y="${rect.y}" width="${rect.w}" height="${rect.h}" rx="${rect.radius}" ry="${rect.radius}" fill="#fff"/>`;
+      ? `<ellipse cx="${x + rect.w / 2}" cy="${y + rect.h / 2}" rx="${rect.w / 2}" ry="${rect.h / 2}" fill="#fff"/>`
+      : `<rect x="${x}" y="${y}" width="${rect.w}" height="${rect.h}" rx="${rect.radius}" ry="${rect.radius}" fill="#fff"/>`;
   return Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${shape}</svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${region.w}" height="${region.h}">${shape}</svg>`
   );
 }
 
@@ -75,30 +118,15 @@ export function escapeXml(value) {
     .replace(/'/g, '&apos;');
 }
 
-/** BADGE-1/2: the role chip rendered into its designated zone. */
-function badgeSvg(text, style, width, height) {
-  const s = { ...DEFAULT_BADGE, ...(style || {}) };
-  const fontSize = Math.round(height * (s.fontPct ?? DEFAULT_BADGE.fontPct));
-  const padX = Math.round(fontSize * 0.9);
-  const padY = Math.round(fontSize * 0.5);
-  // Rough advance width; good enough for a single-line chip and avoids shipping
-  // a font-metrics dependency into the render path.
-  const textWidth = Math.round([...text].length * fontSize * 0.56);
-  const boxW = Math.min(width - 2 * padX, textWidth + padX * 2);
-  const boxH = fontSize + padY * 2;
-  const bg = s.background || '#3366cc';
-  const fg = s.color || '#ffffff';
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${boxW}" height="${boxH}">
-    <rect x="0" y="0" width="${boxW}" height="${boxH}" rx="${boxH / 2}" ry="${boxH / 2}" fill="${bg}" fill-opacity="${s.opacity ?? 0.95}"/>
-    <text x="${boxW / 2}" y="${boxH / 2}" dominant-baseline="central" text-anchor="middle"
-      font-family="system-ui, 'Segoe UI', Roboto, sans-serif" font-size="${fontSize}"
-      font-weight="700" fill="${fg}">${escapeXml(text)}</text>
+/** BADGE-1/2: the role chip, laid out by the same rules the phone uses. */
+function badgeOverlay(text, style, width, height) {
+  const b = badgeLayout(text, style, width, height);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${b.boxW}" height="${b.boxH}">
+    <rect x="0" y="0" width="${b.boxW}" height="${b.boxH}" rx="${b.radius}" ry="${b.radius}" fill="${b.background}" fill-opacity="${b.opacity}"/>
+    <text x="${b.boxW / 2}" y="${b.boxH / 2}" dominant-baseline="central" text-anchor="middle"
+      font-family="${BADGE_FONT}" font-size="${b.fontSize}" font-weight="700" fill="${b.color}">${escapeXml(text)}</text>
   </svg>`;
-
-  const left = Math.round((s.xPct ?? 0.5) * width - boxW / 2);
-  const top = Math.round((s.yPct ?? 0.86) * height - boxH / 2);
-  return { buffer: Buffer.from(svg), left, top };
+  return { input: Buffer.from(svg), left: b.left, top: b.top };
 }
 
 /** Fallback used when a template has no flattened frame yet. */
@@ -114,105 +142,190 @@ function fallbackFrameSvg(width, height) {
 }
 
 /**
+ * The participant's photo, positioned and masked, as a raw RGBA overlay that
+ * covers only the visible part of the cutout. Returns null when the photo does
+ * not reach the cutout at all.
+ */
+async function photoLayer(photoBuffer, rect, placement, width, height) {
+  const input = { failOn: 'none', limitInputPixels: PHOTO_PIXEL_LIMIT };
+
+  let meta;
+  try {
+    meta = await sharp(photoBuffer, input).metadata();
+  } catch {
+    const err = new Error('That photo could not be read. Try a JPG or PNG.');
+    err.status = 400;
+    throw err;
+  }
+  const srcW = meta.autoOrient?.width || meta.width;
+  const srcH = meta.autoOrient?.height || meta.height;
+  if (!srcW || !srcH) {
+    const err = new Error('That photo could not be read. Try a JPG or PNG.');
+    err.status = 400;
+    throw err;
+  }
+
+  // The photo keeps its own shape inside the placement box (never stretched).
+  const fitted = containRect(placement.width, placement.height, srcW / srcH);
+  const photo = {
+    x: placement.left + fitted.dx,
+    y: placement.top + fitted.dy,
+    w: fitted.w,
+    h: fitted.h,
+  };
+
+  // Only this region of the canvas can ever show photo pixels.
+  const window = intersectRect({ x: rect.x, y: rect.y, w: rect.w, h: rect.h }, { x: 0, y: 0, w: width, h: height });
+  if (!window) return null;
+  const region = {
+    x: Math.floor(window.x),
+    y: Math.floor(window.y),
+    w: Math.ceil(window.x + window.w) - Math.floor(window.x),
+    h: Math.ceil(window.y + window.h) - Math.floor(window.y),
+  };
+
+  let layer;
+  if (!placement.rotate) {
+    // Crop the *source* to what lands inside the window, then resize only that.
+    const visible = intersectRect(photo, region);
+    if (!visible) return null;
+    const scaleX = srcW / photo.w;
+    const scaleY = srcH / photo.h;
+    const crop = {
+      left: clampInt((visible.x - photo.x) * scaleX, 0, srcW - 1),
+      top: clampInt((visible.y - photo.y) * scaleY, 0, srcH - 1),
+    };
+    crop.width = clampInt(visible.w * scaleX, 1, srcW - crop.left);
+    crop.height = clampInt(visible.h * scaleY, 1, srcH - crop.top);
+
+    const outLeft = Math.round(visible.x);
+    const outTop = Math.round(visible.y);
+    const outW = Math.max(1, Math.min(region.x + region.w, Math.round(visible.x + visible.w)) - outLeft);
+    const outH = Math.max(1, Math.min(region.y + region.h, Math.round(visible.y + visible.h)) - outTop);
+
+    const { data, info } = await sharp(photoBuffer, input)
+      .autoOrient()
+      .extract(crop)
+      .resize(outW, outH, { fit: 'fill' })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    layer = await placeInRegion(
+      { data, width: info.width, height: info.height },
+      outLeft - region.x,
+      outTop - region.y,
+      region
+    );
+  } else {
+    // Rotation grows the bitmap around its centre; re-centre after rotating.
+    const boxW = Math.max(1, Math.round(photo.w));
+    const boxH = Math.max(1, Math.round(photo.h));
+    const resized = await sharp(photoBuffer, input)
+      .autoOrient()
+      .resize(boxW, boxH, { fit: 'fill' })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const rotated = await sharp(resized.data, {
+      raw: { width: resized.info.width, height: resized.info.height, channels: 4 },
+    })
+      .rotate(placement.rotate, { background: TRANSPARENT })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const left = Math.round(photo.x + boxW / 2 - rotated.info.width / 2);
+    const top = Math.round(photo.y + boxH / 2 - rotated.info.height / 2);
+    layer = await placeInRegion(
+      { data: rotated.data, width: rotated.info.width, height: rotated.info.height },
+      left - region.x,
+      top - region.y,
+      region
+    );
+  }
+  if (!layer) return null;
+
+  // `dest-in` keeps only the pixels covered by the cutout shape.
+  const masked = await sharp(layer, { raw: { width: region.w, height: region.h, channels: 4 } })
+    .composite([{ input: maskSvg(rect, region), blend: 'dest-in' }])
+    .raw()
+    .toBuffer();
+
+  return { input: masked, raw: { width: region.w, height: region.h, channels: 4 }, left: region.x, top: region.y };
+}
+
+/**
+ * Copies a raw RGBA bitmap into a transparent region-sized bitmap at (dx, dy),
+ * clipping whatever falls outside. Pure buffer work — no codec involved.
+ */
+async function placeInRegion(src, dx, dy, region) {
+  const out = Buffer.alloc(region.w * region.h * 4);
+  const x0 = Math.max(0, dx);
+  const y0 = Math.max(0, dy);
+  const x1 = Math.min(region.w, dx + src.width);
+  const y1 = Math.min(region.h, dy + src.height);
+  if (x1 <= x0 || y1 <= y0) return null;
+  const rowBytes = (x1 - x0) * 4;
+  for (let y = y0; y < y1; y += 1) {
+    const srcStart = ((y - dy) * src.width + (x0 - dx)) * 4;
+    src.data.copy(out, (y * region.w + x0) * 4, srcStart, srcStart + rowBytes);
+  }
+  return out;
+}
+
+function clampInt(value, min, max) {
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/**
  * Composites one participant image.
  *
- * @param {Buffer} photoBuffer  Raw upload/camera capture.
- * @param {Buffer|null} frameBuffer  Flattened frame PNG with a transparent cutout.
- * @param {object} opts  { aspectRatio, cutout, badge:{text,style}, placement, format, quality }
+ * @param {object} args
+ * @param {Buffer} args.photoBuffer  Raw upload or camera capture.
+ * @param {Buffer|null} [args.frameBuffer]  Flattened frame PNG with a transparent cutout.
+ * @param {string} [args.frameKey]  Stable id of the frame (its asset id), for caching.
+ * @param {() => Promise<Buffer|null>} [args.loadFrameBuffer]  Reads the frame on a cache miss.
+ * @param {string} args.aspectRatio
+ * @param {object} args.cutout  Template cutout JSON (untrusted, normalized here).
+ * @param {{text:string, style:object}|null} args.badge
+ * @param {object} args.placement  { left, top, width, height, rotate } (untrusted).
+ * @param {'jpeg'|'png'} [args.format]
  */
 export async function composeImage({
   photoBuffer,
   frameBuffer,
+  frameKey,
+  loadFrameBuffer,
   aspectRatio = '1:1',
   cutout,
   badge,
   placement,
-  format = 'png',
+  format = 'jpeg',
   quality = 90,
 }) {
   const { w: width, h: height } = ratioDims(aspectRatio);
   const rect = cutoutRect(cutout, width, height);
+  const safePlacement = sanitizePlacement(placement, rect, width, height);
 
-  // SEC-2: re-encoding through sharp strips EXIF/GPS and any embedded payload.
-  // `.rotate()` with no argument first applies the EXIF orientation, so portrait
-  // phone photos are not silently rendered sideways.
-  const oriented = await sharp(photoBuffer, { failOn: 'none' }).rotate().png().toBuffer();
+  const [photo, frame] = await Promise.all([
+    photoLayer(photoBuffer, rect, safePlacement, width, height),
+    frameLayer({ frameBuffer, frameKey, loadFrameBuffer }, width, height),
+  ]);
 
-  const p = placement || {};
-  const boxW = Math.max(1, Math.round(p.width ?? rect.w));
-  const boxH = Math.max(1, Math.round(p.height ?? rect.h));
-  const left = p.left ?? rect.x;
-  const top = p.top ?? rect.y;
+  const layers = [];
+  if (photo) layers.push(photo);
+  layers.push({ input: frame.data, raw: frame.raw, left: 0, top: 0 });
+  if (badge?.text) layers.push(badgeOverlay(badge.text, badge.style, width, height));
 
-  let photoLayer = await sharp(oriented)
-    .resize(boxW, boxH, { fit: p.fit === 'contain' ? 'contain' : 'cover', background: TRANSPARENT })
-    .png()
-    .toBuffer();
+  // JPEG has no alpha: start from white so see-through parts of a frame read
+  // as white, exactly as they do on the phone.
+  const isJpeg = format === 'jpeg';
+  const pipeline = blankCanvas(width, height, isJpeg ? WHITE : TRANSPARENT).composite(layers);
+  const buffer = isJpeg
+    ? await pipeline.jpeg({ quality, chromaSubsampling: '4:4:4' }).toBuffer()
+    : await pipeline.png({ compressionLevel: 6, adaptiveFiltering: false }).toBuffer();
 
-  let placedW = boxW;
-  let placedH = boxH;
-  if (p.rotate) {
-    photoLayer = await sharp(photoLayer)
-      .rotate(p.rotate, { background: TRANSPARENT })
-      .png()
-      .toBuffer();
-    const meta = await sharp(photoLayer).metadata();
-    placedW = meta.width;
-    placedH = meta.height;
-  }
-
-  // Rotation grows the bitmap around its centre; re-centre so the photo does not
-  // drift out of the cutout.
-  const placed = await placeOnCanvas(
-    photoLayer,
-    left - (placedW - boxW) / 2,
-    top - (placedH - boxH) / 2,
-    width,
-    height
-  );
-
-  const photoCanvas = await blankCanvas(width, height)
-    .composite(placed ? [placed] : [])
-    .png()
-    .toBuffer();
-
-  // `dest-in` keeps only the pixels covered by the cutout shape.
-  const maskedPhoto = await sharp(photoCanvas)
-    .composite([{ input: maskSvg(rect, width, height), blend: 'dest-in' }])
-    .png()
-    .toBuffer();
-
-  const frame = frameBuffer
-    ? await sharp(frameBuffer)
-        .resize(width, height, { fit: 'fill' })
-        .png()
-        .toBuffer()
-    : await sharp(fallbackFrameSvg(width, height)).png().toBuffer();
-
-  const layers = [
-    { input: maskedPhoto },
-    { input: frame },
-  ];
-
-  if (badge?.text) {
-    const chip = badgeSvg(badge.text, badge.style, width, height);
-    const placedBadge = await placeOnCanvas(
-      await sharp(chip.buffer).png().toBuffer(),
-      chip.left,
-      chip.top,
-      width,
-      height
-    );
-    if (placedBadge) layers.push(placedBadge);
-  }
-
-  const pipeline = blankCanvas(width, height).composite(layers);
-  const buffer =
-    format === 'jpeg'
-      ? await pipeline.flatten({ background: '#ffffff' }).jpeg({ quality }).toBuffer()
-      : await pipeline.png({ compressionLevel: 9 }).toBuffer();
-
-  return { buffer, width, height, mime: format === 'jpeg' ? 'image/jpeg' : 'image/png' };
+  return { buffer, width, height, mime: isJpeg ? 'image/jpeg' : 'image/png' };
 }
 
 /**
@@ -233,20 +346,18 @@ export async function renderBlankFrame({ aspectRatio = '1:1', cutout, label = ''
        ${
          label
            ? `<text x="${width / 2}" y="${height - inset * 2}" text-anchor="middle"
-               font-family="system-ui, sans-serif" font-size="${captionSize}" fill="#54595d">${escapeXml(label)}</text>`
+               font-family="${BADGE_FONT}" font-size="${captionSize}" fill="#54595d">${escapeXml(label)}</text>`
            : ''
        }
      </svg>`
   );
 
   // dest-out punches the cutout back to full transparency (§10.3 step 2).
+  const full = { x: 0, y: 0, w: width, h: height };
   const buffer = await sharp(base)
-    .png()
-    .composite([{ input: maskSvg(rect, width, height), blend: 'dest-out' }])
-    .png()
+    .composite([{ input: maskSvg(rect, full), blend: 'dest-out' }])
+    .png({ compressionLevel: 6 })
     .toBuffer();
 
   return { buffer, width, height, cutout: rect };
 }
-
-export { cutoutRect };

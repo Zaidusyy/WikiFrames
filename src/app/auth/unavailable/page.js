@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { config } from '@/lib/config';
+import Icon from '@/components/Icon';
 
 export const metadata = { title: 'Sign-in unavailable' };
 
@@ -28,9 +29,7 @@ export default async function AuthUnavailablePage({ searchParams }) {
   return (
     <main id="main" className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-5 py-16">
       <div className="wf-card p-8 text-center">
-        <span aria-hidden="true" className="text-5xl">
-          🔐
-        </span>
+        <Icon name="cdxIconLock" size="xl" className="mx-auto text-wiki-blue" />
         <h1 className="mt-4 font-serif text-2xl">{reason.title}</h1>
         <p className="mt-3 leading-relaxed text-wiki-slate">{reason.body}</p>
 
@@ -50,7 +49,7 @@ export default async function AuthUnavailablePage({ searchParams }) {
       </div>
 
       {config.devLoginEnabled ? (
-        <div className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="mt-6 rounded border border-wiki-warning-border bg-wiki-warning-bg p-4 text-sm text-wiki-ink">
           <strong>Development mode.</strong> A local sign-in shortcut is enabled on this instance
           (<code>ALLOW_DEV_LOGIN</code>).{' '}
           <a href="/api/v1/auth/dev?username=DevOrganizer" className="font-semibold underline">

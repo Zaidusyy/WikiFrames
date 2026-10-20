@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { assertSameOrigin, badRequest, handler, ok } from '@/lib/api';
+import { assertSameOrigin, badRequest, handler, ok, readJson } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { assertCanDelete, loadCampaignFor } from '@/lib/authz';
 import { LIFECYCLE, effectiveStatus, purgeDateFor } from '@/lib/campaigns';
@@ -21,10 +21,11 @@ export const POST = handler(async (req, { params }) => {
   const user = await requireUser();
   const { id } = await params;
   const { campaign, access } = await loadCampaignFor(user, id);
-  const { action } = await req.json();
+  const { action } = await readJson(req);
 
-  const transition = TRANSITIONS[action];
-  if (!transition) throw badRequest(`Unknown action "${action}".`);
+  // Own properties only: "constructor" or "__proto__" must not look like a transition.
+  const transition = typeof action === 'string' && Object.hasOwn(TRANSITIONS, action) ? TRANSITIONS[action] : null;
+  if (!transition) throw badRequest('Unknown lifecycle action.');
   // DASH-4: cancelling kills the participant link, so it is owner-only.
   if (action === 'cancel') assertCanDelete(access);
 

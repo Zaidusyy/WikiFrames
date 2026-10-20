@@ -1,16 +1,24 @@
-# Local PostgreSQL for development. Production deployments should point
-# DATABASE_URL at a managed instance instead.
+# WikiFrames with PostgreSQL, for a single-server deployment or a realistic
+# local stack.
+#
+#   cp .env.example .env    # set APP_BASE_URL, APP_SECRET, OAuth, CRON_SECRET
+#   docker compose --profile app up -d   # app + database
+#
+# Without the profile only the database starts (`docker compose up -d`), which
+# is all local development needs alongside `npm run dev`. Ports bind to 127.0.0.1 so
+# neither service is reachable from the network unless you put a reverse proxy
+# (nginx, Caddy, Traefik) in front of the app, which production requires.
+
 services:
-  postgres:
+  db:
     image: postgres:16-alpine
-    container_name: wikiframes-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: wikiframes
-      POSTGRES_PASSWORD: wikiframes
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wikiframes}
       POSTGRES_DB: wikiframes
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - wikiframes-pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -19,5 +27,22 @@ services:
       timeout: 5s
       retries: 10
 
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://wikiframes:${POSTGRES_PASSWORD:-wikiframes}@db:5432/wikiframes?schema=public
+      STORAGE_LOCAL_ROOT: /data/storage
+    ports:
+      - '127.0.0.1:3000:3000'
+    volumes:
+      - wikiframes-storage:/data
+    profiles: ['app']
+
 volumes:
   wikiframes-pgdata:
+  wikiframes-storage:

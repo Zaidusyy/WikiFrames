@@ -13,7 +13,7 @@ export default async function PlatformOverviewPage() {
   const user = await getCurrentUser();
   if (!user || user.role !== 'super_admin') redirect('/dashboard');
 
-  const [users, groups, campaigns, activeCampaigns, stored, generated, shares, pending, expiring] =
+  const [users, groups, campaigns, activeCampaigns, stored, generated, shares, pending, expiring, featured] =
     await Promise.all([
       prisma.user.count(),
       prisma.user.findMany({
@@ -28,13 +28,14 @@ export default async function PlatformOverviewPage() {
       prisma.analyticsEvent.count({ where: { kind: 'share_tap' } }),
       prisma.user.count({ where: { wallOptIn: true, wallStatus: 'pending' } }),
       prisma.generatedImage.count({ where: { expiresAt: { lte: new Date() } } }),
+      prisma.user.count({ where: { wallOptIn: true, wallStatus: 'approved' } }),
     ]);
 
   const targets = [
     ['Campaigns created', campaigns, 50],
     ['Distinct user groups', groups.length, 20],
     ['Participant images generated', generated, 5000],
-    ['Featured groups on the wall', users, 10],
+    ['Featured groups on the wall', featured, 10],
   ];
 
   return (
@@ -67,7 +68,7 @@ export default async function PlatformOverviewPage() {
 
       {/* RET-4 / SEC-6: an overdue purge is a broken promise, not a backlog. */}
       {expiring > 0 ? (
-        <div className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+        <div className="rounded border border-wiki-error-border bg-wiki-error-bg px-4 py-3 text-sm text-wiki-ink">
           <strong>{expiring} image(s) are past their deletion date.</strong> The retention job has
           not run, or it failed. Run <code>npm run purge</code> or check the cron alert — this is a
           privacy commitment, not a cleanup task.
@@ -111,6 +112,11 @@ export default async function PlatformOverviewPage() {
           />
           <Row label="OAuth configured" value={config.oauth.clientId ? 'yes' : 'no'} />
           <Row label="Cron secret set" value={config.retention.cronSecret ? 'yes' : 'no'} />
+          <Row
+            label="Retention safety net"
+            value={config.retention.schedulerEnabled ? `every ${config.retention.schedulerIntervalMinutes} min` : 'off'}
+          />
+          <Row label="Trusted proxy hops" value={String(config.trustProxyHops)} />
         </dl>
         <Link href="/dashboard/admin/wall" className="mt-4 inline-block font-semibold text-wiki-blue hover:underline">
           Review the community wall queue →

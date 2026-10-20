@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/db';
-import { assertSameOrigin, badRequest, handler, ok } from '@/lib/api';
+import { assertSameOrigin, badRequest, handler, ok, readJson } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { assertCanDelete, loadCampaignFor } from '@/lib/authz';
-import { effectiveStatus, purgeDateFor } from '@/lib/campaigns';
+import { effectiveStatus, parseAccessCode, purgeDateFor } from '@/lib/campaigns';
 import { campaignUrl } from '@/lib/qr';
 import { assetUrl } from '@/lib/storage';
 
@@ -36,16 +36,27 @@ export const GET = handler(async (_req, { params }) => {
   });
 });
 
+function parseDate(value, label) {
+  const date = new Date(value);
+  if (value === null || value === '' || Number.isNaN(date.getTime())) {
+    throw badRequest(`Please provide a valid ${label}.`);
+  }
+  return date;
+}
+
 // Content edits are open to co-team members; only destructive actions are not.
 export const PATCH = handler(async (req, { params }) => {
   assertSameOrigin(req);
   const user = await requireUser();
   const { id } = await params;
   const { campaign } = await loadCampaignFor(user, id);
-  const body = await req.json();
+  const body = await readJson(req);
 
   const data = {};
-  if (body.name !== undefined) data.name = String(body.name).slice(0, 80);
+  if (body.name !== undefined) {
+    data.name = String(body.name).trim().slice(0, 80);
+    if (!data.name) throw badRequest('Give the campaign a name.');
+  }
   if (body.description !== undefined) data.description = String(body.description).slice(0, 1000);
   if (body.location !== undefined) data.location = body.location ? String(body.location).slice(0, 200) : null;
   if (body.organizingGroup !== undefined) {
@@ -53,37 +64,31 @@ export const PATCH = handler(async (req, { params }) => {
   }
   if (body.publicGallery !== undefined) data.publicGallery = Boolean(body.publicGallery);
   if (body.roleRequired !== undefined) data.roleRequired = Boolean(body.roleRequired);
-  if (body.accessCode !== undefined) {
-    const code = body.accessCode ? String(body.accessCode).replace(/\D/g, '').slice(0, 6) : '';
-    // LINK-7: 4–6 digits, printed at the venue as a light second factor.
-    if (code && code.length < 4) throw badRequest('An access code must be 4 to 6 digits.');
-    data.accessCode = code || null;
-  }
+  if (body.accessCode !== undefined) data.accessCode = parseAccessCode(body.accessCode);
 
-  if (body.eventDate !== undefined) data.eventDate = new Date(body.eventDate);
-  if (body.eventEndDate !== undefined) data.eventEndDate = new Date(body.eventEndDate);
+  if (body.eventDate !== undefined) data.eventDate = parseDate(body.eventDate, 'event date');
+  if (body.eventEndDate !== undefined) data.eventEndDate = parseDate(body.eventEndDate, 'end date');
   if (body.registrationOpenDate !== undefined) {
-    data.registrationOpenDate = new Date(body.registrationOpenDate);
+    data.registrationOpenDate = parseDate(body.registrationOpenDate, 'registration date');
   }
 
   const start = data.eventDate ?? campaign.eventDate;
   const end = data.eventEndDate ?? campaign.eventEndDate;
-  if (Number.isNaN(new Date(start).getTime()) || Number.isNaN(new Date(end).getTime())) {
-    throw badRequest('Please provide valid event dates.');
-  }
   if (new Date(end) < new Date(start)) {
     throw badRequest('The event end date must be on or after the event date.');
   }
-  if (data.eventEndDate) {
-    // RET-4: moving the end date moves the retention clock with it.
-    data.purgeAt = purgeDateFor(data.eventEndDate);
-    await prisma.generatedImage.updateMany({
-      where: { campaignId: campaign.id },
-      data: { expiresAt: data.purgeAt },
-    });
-  }
 
-  const updated = await prisma.campaign.update({ where: { id: campaign.id }, data });
+  const updated = await prisma.$transaction(async (tx) => {
+    if (data.eventEndDate) {
+      // RET-4: moving the end date moves the retention clock with it.
+      data.purgeAt = purgeDateFor(data.eventEndDate);
+      await tx.generatedImage.updateMany({
+        where: { campaignId: campaign.id },
+        data: { expiresAt: data.purgeAt },
+      });
+    }
+    return tx.campaign.update({ where: { id: campaign.id }, data });
+  });
   return ok({ campaign: updated });
 });
 

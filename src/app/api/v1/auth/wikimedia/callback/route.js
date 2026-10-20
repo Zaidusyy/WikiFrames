@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/db';
 import { exchangeCode, fetchProfile } from '@/lib/oauth';
-import { createSession } from '@/lib/session';
+import { clearCookie, createSession } from '@/lib/session';
 import { handler } from '@/lib/api';
 import { safeEqual } from '@/lib/tokens';
 
@@ -18,10 +18,10 @@ export const GET = handler(async (req) => {
   const oauthError = url.searchParams.get('error');
 
   const jar = await cookies();
-  const expectedState = jar.get('wf_oauth_state')?.value;
-  const codeVerifier = jar.get('wf_oauth_verifier')?.value;
-  jar.delete('wf_oauth_state');
-  jar.delete('wf_oauth_verifier');
+  const expectedState = jar.get(config.cookies.oauthState)?.value;
+  const codeVerifier = jar.get(config.cookies.oauthVerifier)?.value;
+  clearCookie(jar, config.cookies.oauthState);
+  clearCookie(jar, config.cookies.oauthVerifier);
 
   if (oauthError) return NextResponse.redirect(`${config.baseUrl}/auth/unavailable`);
   if (!code || !state || !expectedState || !codeVerifier || !safeEqual(state, expectedState)) {
@@ -33,10 +33,13 @@ export const GET = handler(async (req) => {
     const tokens = await exchangeCode({ code, codeVerifier });
     profile = await fetchProfile(tokens.access_token);
   } catch (err) {
-    console.error('[auth] wikimedia oauth failed', err);
+    console.error('[auth] wikimedia oauth failed:', err.message);
     return NextResponse.redirect(`${config.baseUrl}/auth/unavailable?reason=upstream`);
   }
 
+  // SUPER_ADMIN_USERNAMES is the single source of truth for platform admins:
+  // promote on every sign-in, and demote anyone who has been taken off the
+  // list instead of letting the privilege outlive the configuration.
   const isSuperAdmin = config.superAdminUsernames.includes(profile.wikiUsername);
 
   const user = await prisma.user.upsert({
@@ -49,8 +52,7 @@ export const GET = handler(async (req) => {
     },
     update: {
       wikiUsername: profile.wikiUsername,
-      userPageUrl: profile.userPageUrl,
-      ...(isSuperAdmin ? { role: 'super_admin' } : {}),
+      role: isSuperAdmin ? 'super_admin' : 'organizer',
     },
   });
 

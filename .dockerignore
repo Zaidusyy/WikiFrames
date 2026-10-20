@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+.next
+.pgdata
+.storage
+tmp
+coverage
+*.log
+.env
+.env.*
+!.env.example
+.eslintcache
+Dockerfile
+docker-compose.yml

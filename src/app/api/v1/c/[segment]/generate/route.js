@@ -1,28 +1,43 @@
 import { config } from '@/lib/config';
 import { prisma } from '@/lib/db';
-import { badRequest, clientIp, forbidden, handler, notFound, ok } from '@/lib/api';
+import {
+  badRequest,
+  clientIp,
+  forbidden,
+  handler,
+  notFound,
+  ok,
+  rateKeyForIp,
+  readForm,
+} from '@/lib/api';
 import { enforce } from '@/lib/ratelimit';
 import { readUploadFile } from '@/lib/uploads';
-import { composeImage, DEFAULT_BADGE, DEFAULT_CUTOUT } from '@/lib/composite';
+import { composeImage } from '@/lib/composite';
 import { getObject, assetUrl, storeAsset } from '@/lib/storage';
 import { randomToken } from '@/lib/tokens';
 import { acceptsGenerations, composeCaption, purgeDateFor } from '@/lib/campaigns';
 import { badgeTextFor } from '@/lib/presets';
-import {
-  assertAccessCode,
-  recordEvent,
-  resolveCampaignByLink,
-} from '@/lib/participant';
+import { assertAccessCode, recordEvent, resolveCampaignByLink } from '@/lib/participant';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// How long the participant's own link to their stored image keeps working.
+const RESULT_LINK_SECONDS = 24 * 60 * 60;
+
 /**
- * §14.1 step 7 — the one endpoint that turns a photo into a shareable image.
+ * §14.1 step 7 — the server path that turns a photo into a shareable image.
  *
- * The consent flag is the branch that matters: `false` means the bytes are
- * composed in memory, handed back inline and never written anywhere (RET-2).
- * There is deliberately no "store it just in case" path.
+ * Participants who do NOT allow storage never reach this endpoint at all: the
+ * participant page composes their image on their own device and their photo
+ * is never uploaded. This route exists for people who chose to share their
+ * image with the campaign gallery — the server has to render it so the
+ * gallery only ever holds genuine, framed images — and, only if a participant
+ * explicitly asks for it, for devices that cannot render locally.
+ *
+ * The consent flag is still the branch that matters: `false` means the bytes
+ * are composed in memory, handed back inline and never written anywhere
+ * (RET-2). There is deliberately no "store it just in case" path.
  */
 export const POST = handler(async (req, { params }) => {
   const { segment } = await params;
@@ -34,10 +49,11 @@ export const POST = handler(async (req, { params }) => {
 
   // LINK-5: the flow is open by design, so the throttle is what stands between
   // a public link and someone scripting it.
-  enforce(`gen:${campaign.id}:${clientIp(req)}`, config.limits.generatePerHourPerIp);
+  const ipKey = rateKeyForIp(clientIp(req));
+  enforce(`gen:${campaign.id}:${ipKey}`, config.limits.generatePerHourPerIp);
 
-  const form = await req.formData();
-  assertAccessCode(campaign, form.get('accessCode'));
+  const form = await readForm(req, config.limits.photoUploadBytes + 64 * 1024);
+  assertAccessCode(campaign, form.get('accessCode'), ipKey);
 
   const templateId = String(form.get('templateId') || '');
   const template = campaign.templates.find((t) => t.id === templateId);
@@ -61,30 +77,22 @@ export const POST = handler(async (req, { params }) => {
 
   const photo = await readUploadFile(form, 'photo', config.limits.photoUploadBytes);
 
-  const frameBuffer = template.frameAssetId
-    ? await loadFrame(template.frameAssetId)
-    : null;
-
   const badgeText = role ? badgeTextFor(role) : '';
-  const cutout = template.canvasJson?.cutout ?? DEFAULT_CUTOUT;
-  const badgeStyle = template.canvasJson?.badge ?? DEFAULT_BADGE;
-
   const rendered = await composeImage({
     photoBuffer: photo,
-    frameBuffer,
+    frameKey: template.frameAssetId,
+    loadFrameBuffer: template.frameAssetId ? () => loadFrame(template.frameAssetId) : null,
     aspectRatio: template.aspectRatio,
-    cutout,
-    badge: badgeText ? { text: badgeText, style: badgeStyle } : null,
+    cutout: template.canvasJson?.cutout,
+    badge: badgeText ? { text: badgeText, style: template.canvasJson?.badge } : null,
     placement,
-    format: 'png',
+    format: 'jpeg',
   });
 
   // Fires for every render, stored or not — it is the denominator of the
   // consent rate in §17.2.
   await recordEvent(campaign.id, 'generate', {
-    template: template.id,
-    role: role?.id ?? null,
-    consent,
+    meta: { template: template.id, role: role?.id ?? null, consent, mode: 'server' },
   });
 
   const shareText = composeCaption({
@@ -100,6 +108,7 @@ export const POST = handler(async (req, { params }) => {
       shareText,
       image: {
         url: `data:${rendered.mime};base64,${rendered.buffer.toString('base64')}`,
+        mime: rendered.mime,
         width: rendered.width,
         height: rendered.height,
       },
@@ -138,7 +147,8 @@ export const POST = handler(async (req, { params }) => {
     shareText,
     image: {
       id: image.id,
-      url: assetUrl(asset.id),
+      url: assetUrl(asset.id, { signedForSeconds: RESULT_LINK_SECONDS }),
+      mime: rendered.mime,
       width: rendered.width,
       height: rendered.height,
     },
@@ -156,9 +166,9 @@ async function loadFrame(frameAssetId) {
 }
 
 function parseJson(value) {
-  if (!value) return null;
+  if (!value || typeof value !== 'string' || value.length > 2000) return null;
   try {
-    return JSON.parse(String(value));
+    return JSON.parse(value);
   } catch {
     return null;
   }

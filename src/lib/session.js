@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { config } from './config';
 import { prisma } from './db';
@@ -15,9 +16,9 @@ export async function createSession(userId) {
     data: { userId, tokenHash: sha256(token), expiresAt },
   });
   const jar = await cookies();
-  jar.set(config.session.cookieName, token, {
+  jar.set(config.cookies.session, token, {
     httpOnly: true,
-    secure: config.baseUrl.startsWith('https://'),
+    secure: config.cookies.secure,
     sameSite: 'lax',
     path: '/',
     maxAge: config.session.absoluteDays * 24 * 60 * 60,
@@ -28,11 +29,14 @@ export async function createSession(userId) {
 /**
  * Resolves the current user, sliding the expiry forward but never past the
  * absolute ceiling measured from session creation.
+ *
+ * Wrapped in React's per-request cache: a page, its metadata and its layout
+ * all ask "who is this?" and should cost one database round-trip, not three.
  */
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async function getCurrentUser() {
   const jar = await cookies();
-  const token = jar.get(config.session.cookieName)?.value;
-  if (!token) return null;
+  const token = jar.get(config.cookies.session)?.value;
+  if (!token || token.length > 128) return null;
 
   const session = await prisma.session.findUnique({
     where: { tokenHash: sha256(token) },
@@ -40,19 +44,14 @@ export async function getCurrentUser() {
   });
   if (!session) return null;
 
-  if (session.expiresAt.getTime() < Date.now()) {
+  const now = Date.now();
+  const absoluteDeadline = session.createdAt.getTime() + config.session.absoluteDays * DAY_MS;
+  if (session.expiresAt.getTime() < now || now > absoluteDeadline) {
     await prisma.session.delete({ where: { id: session.id } }).catch(() => {});
     return null;
   }
 
-  const absoluteDeadline =
-    session.createdAt.getTime() + config.session.absoluteDays * DAY_MS;
-  if (Date.now() > absoluteDeadline) {
-    await prisma.session.delete({ where: { id: session.id } }).catch(() => {});
-    return null;
-  }
-
-  const slidTo = Math.min(Date.now() + config.session.slidingDays * DAY_MS, absoluteDeadline);
+  const slidTo = Math.min(now + config.session.slidingDays * DAY_MS, absoluteDeadline);
   if (slidTo - session.expiresAt.getTime() > 60 * 60 * 1000) {
     await prisma.session
       .update({ where: { id: session.id }, data: { expiresAt: new Date(slidTo) } })
@@ -60,16 +59,30 @@ export async function getCurrentUser() {
   }
 
   return session.user;
-}
+});
 
 // AUTH-5: server-side destroy, then clear the cookie.
 export async function destroySession() {
   const jar = await cookies();
-  const token = jar.get(config.session.cookieName)?.value;
+  const token = jar.get(config.cookies.session)?.value;
   if (token) {
     await prisma.session.deleteMany({ where: { tokenHash: sha256(token) } });
   }
-  jar.delete(config.session.cookieName);
+  clearCookie(jar, config.cookies.session);
+}
+
+/**
+ * Expires a cookie with the same attributes it was set with — browsers ignore
+ * a deletion of a `__Host-` cookie that does not carry `Secure`.
+ */
+export function clearCookie(jar, name) {
+  jar.set(name, '', {
+    httpOnly: true,
+    secure: config.cookies.secure,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 0,
+  });
 }
 
 export async function requireUser() {

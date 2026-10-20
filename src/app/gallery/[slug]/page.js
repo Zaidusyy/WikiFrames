@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db';
 import { assetUrl } from '@/lib/storage';
 import { formatDateRange } from '@/lib/format';
 import { daysUntil } from '@/lib/campaigns';
+import { config } from '@/lib/config';
+import Icon from '@/components/Icon';
 
 // GAL-3: public galleries live for the 30-day window, then the page gracefully
 // falls back to event stats only. Revalidated rather than dynamic so a viral
@@ -33,7 +35,7 @@ export default async function PublicGalleryPage({ params }) {
 
   // A campaign that never opted in to a public gallery must not be discoverable
   // by guessing its slug.
-  if (!campaign || campaign.status === 'draft') notFound();
+  if (!campaign || campaign.status === 'draft' || campaign.status === 'cancelled') notFound();
 
   const images = await prisma.generatedImage.findMany({
     where: { campaignId: campaign.id },
@@ -51,8 +53,8 @@ export default async function PublicGalleryPage({ params }) {
 
   return (
     <main id="main" className="mx-auto max-w-6xl px-5 py-12">
-      <Link href="/" className="text-sm font-semibold text-wiki-blue hover:underline">
-        ← WikiFrames
+      <Link href="/" className="inline-flex items-center gap-1 text-sm font-bold text-wiki-blue hover:underline">
+        <Icon name="cdxIconArrowPrevious" size="sm" /> WikiFrames
       </Link>
 
       <header className="mt-6">
@@ -80,7 +82,7 @@ export default async function PublicGalleryPage({ params }) {
         <div className="wf-card mt-10 p-12 text-center">
           <h2 className="font-serif text-2xl">The images have moved on</h2>
           <p className="mx-auto mt-3 max-w-lg leading-relaxed text-wiki-slate">
-            This gallery kept its images for 30 days after the event, and that window has closed —
+            This gallery kept its images for {config.retention.days} days after the event, and that window has closed —
             everything has been permanently deleted from our servers, exactly as promised to the
             people who created them. The event and its numbers remain here.
           </p>
@@ -92,7 +94,7 @@ export default async function PublicGalleryPage({ params }) {
         <>
           <ul className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {images.map((image) => (
-              <li key={image.id} className="overflow-hidden rounded-xl border border-wiki-line bg-white">
+              <li key={image.id} className="overflow-hidden rounded border border-wiki-line bg-white">
                 {/* GAL-4: lazy-loaded thumbnails; originals are admin-only. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -116,7 +118,7 @@ export default async function PublicGalleryPage({ params }) {
 
           <p className="mt-8 text-xs leading-relaxed text-wiki-slate">
             Every image here was created by a participant who explicitly agreed to it being shown.
-            All of them are deleted permanently 30 days after the event closes. Spotted something
+            All of them are deleted permanently {config.retention.days} days after the event closes. Spotted something
             that should not be here?{' '}
             <a
               href="https://github.com/Zaidusyy/WikiFrames/issues"
@@ -131,7 +133,7 @@ export default async function PublicGalleryPage({ params }) {
         </>
       )}
 
-      <div className="mt-12 rounded-xl border border-wiki-line bg-wiki-blue-light p-6 text-center">
+      <div className="mt-12 rounded border border-wiki-line bg-wiki-blue-light p-6 text-center">
         <p className="font-serif text-xl">Running a Wikimedia event of your own?</p>
         <p className="mt-2 text-sm text-wiki-blue-dark">
           Build a campaign like this one in a few minutes.

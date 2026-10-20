@@ -1,7 +1,9 @@
+import { config } from '@/lib/config';
 import { prisma } from '@/lib/db';
-import { assertSameOrigin, handler, ok } from '@/lib/api';
+import { assertSameOrigin, badRequest, handler, ok, readJson } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { assertOwnsTemplate, loadCampaignFor } from '@/lib/authz';
+import { enforce } from '@/lib/ratelimit';
 import { assetUrl } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
@@ -12,17 +14,22 @@ export const POST = handler(async (req, { params }) => {
   assertSameOrigin(req);
   const user = await requireUser();
   const { id } = await params;
+  enforce(`template-create:${user.id}`, 120);
 
-  const source = await prisma.template.findUnique({ where: { id } });
-  if (!source || (source.ownerId && source.source !== 'platform_default')) {
-    // Non-platform templates still go through the full ownership check.
-    await assertOwnsTemplate(user, id);
-  }
+  const found = typeof id === 'string' ? await prisma.template.findUnique({ where: { id } }) : null;
+  // Platform starters are cloneable by anyone signed in; everything else goes
+  // through the full ownership check.
+  const source =
+    found && found.source === 'platform_default' && !found.ownerId ? found : await assertOwnsTemplate(user, id);
 
-  const body = await req.json().catch(() => ({}));
+  const body = await readJson(req);
   let campaignId = null;
   if (body.campaignId) {
     const { campaign } = await loadCampaignFor(user, String(body.campaignId));
+    const count = await prisma.template.count({ where: { campaignId: campaign.id } });
+    if (count >= config.limits.templatesPerCampaign) {
+      throw badRequest(`A campaign can hold at most ${config.limits.templatesPerCampaign} templates.`);
+    }
     campaignId = campaign.id;
   }
 

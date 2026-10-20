@@ -150,7 +150,7 @@ export default function CampaignRoles({ campaign, seededRoles, onChange, onToast
                 <button
                   type="button"
                   onClick={() => setRoles((c) => c.filter((_, i) => i !== index))}
-                  className="text-xs font-medium text-rose-700 hover:underline"
+                  className="text-xs font-bold text-wiki-error hover:underline"
                 >
                   Remove
                 </button>

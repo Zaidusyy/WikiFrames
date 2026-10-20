@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { assertSameOrigin, badRequest, handler, ok } from '@/lib/api';
+import { assertSameOrigin, badRequest, handler, ok, readJson } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { loadCampaignFor } from '@/lib/authz';
 
@@ -24,7 +24,7 @@ export const PUT = handler(async (req, { params }) => {
   const { id } = await params;
   const { campaign } = await loadCampaignFor(user, id);
 
-  const { captions, hashtags } = await req.json();
+  const { captions, hashtags } = await readJson(req);
   if (!Array.isArray(captions) || captions.length === 0) {
     throw badRequest('Add at least one caption — it is what every shared image carries.');
   }
@@ -33,14 +33,12 @@ export const PUT = handler(async (req, { params }) => {
   }
 
   const sharedTags = normalizeHashtags(hashtags);
+  // Drop empty entries *before* deciding which one is mandatory — otherwise a
+  // blank first caption would leave the campaign with no mandatory caption.
   const cleaned = captions
-    .map((c, i) => ({
-      text: String(c.text || '').trim().slice(0, 400),
-      hashtags: sharedTags,
-      isMandatory: i === 0,
-      sort: i,
-    }))
-    .filter((c) => c.text);
+    .map((c) => String(c?.text || '').trim().slice(0, 400))
+    .filter(Boolean)
+    .map((text, i) => ({ text, hashtags: sharedTags, isMandatory: i === 0, sort: i }));
 
   if (!cleaned.length) throw badRequest('Captions cannot be empty.');
 
