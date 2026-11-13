@@ -15,6 +15,11 @@ uses [Semantic Versioning](https://semver.org/).
 - `CLIENT_IP_HIDDEN` for hosts that hide visitor addresses: per-visitor
   rate limits become shared, event-sized ones.
 
+### Changed
+- React and React DOM 19.3.1, updated together. Dependabot now proposes
+  linked packages (React, Next.js, Prisma) in one pull request and leaves
+  their major versions to planned migrations.
+
 ### Fixed
 - Sign-in asked Wikimedia for the `basic` scope, which an identity-only
   OAuth consumer does not have and MediaWiki silently drops. It now asks

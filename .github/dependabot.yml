@@ -5,7 +5,33 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Packages that only work at matching versions arrive in one pull request.
+    groups:
+      react:
+        patterns: ["react", "react-dom"]
+      next:
+        patterns: ["next", "eslint-config-next"]
+      prisma:
+        patterns: ["prisma", "@prisma/client"]
+    # Major versions of these are planned migrations, done by hand with the
+    # code changes they need, not routine bumps.
+    ignore:
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

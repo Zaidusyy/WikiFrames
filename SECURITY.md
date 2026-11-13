@@ -63,4 +63,11 @@ should update promptly.
 `npm audit` (including development dependencies) reports issues in `braces`
 and `postcss-selector-parser`, pulled in by Tailwind CSS 3. They are build-time
 only, never process untrusted input, and are not shipped in the production
-bundle; `npm audit --omit=dev` reports no vulnerabilities.
+bundle.
+
+`npm audit --omit=dev` reports two moderate advisories in `glob`
+(GHSA-3g3m-2fjr-6pw4) and `minimatch` (GHSA-g3hv-75wg-m249), reached only
+through `archiver`, the gallery ZIP export. WikiFrames adds files to the ZIP
+from memory and never passes it a glob pattern or a path from a user, so
+neither is reachable; they clear when `archiver` moves to the fixed
+versions. CI fails on any high or critical advisory.
