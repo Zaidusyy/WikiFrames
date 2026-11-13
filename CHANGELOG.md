@@ -15,6 +15,11 @@ uses [Semantic Versioning](https://semver.org/).
 - `CLIENT_IP_HIDDEN` for hosts that hide visitor addresses: per-visitor
   rate limits become shared, event-sized ones.
 
+### Security
+- Next.js 15.5.28, which fixes an unauthenticated remote code execution in
+  the image optimizer (GHSA-2464-fhr4-w9xw; WikiFrames turns the optimizer
+  off) and a denial of service in Server Actions (GHSA-p3m5-59mp-jv5r).
+
 ## [0.2.0] — 2026-10-20
 
 ### Added
