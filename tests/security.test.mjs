@@ -5,7 +5,7 @@ import { isWikimediaUrl, normalizeWikiUsername, sanitizeCanvasJson, sanitizeCred
 import { signValue, verifySignedValue } from '../src/lib/signing.js';
 import { consume, enforce, peek, resetRateLimits } from '../src/lib/ratelimit.js';
 import { parseCommonsInput, attributionLine } from '../src/lib/commons.js';
-import { parseProfile } from '../src/lib/oauth.js';
+import { buildAuthorizeUrl, parseProfile } from '../src/lib/oauth.js';
 
 test('participant links resolve even when the token contains dashes', () => {
   // ~28% of base64url tokens contain "-"; splitting on the last dash broke them.
@@ -158,4 +158,12 @@ test('OAuth profiles without a central id are refused', () => {
   const ok = parseProfile({ sub: '42', username: 'Jane Doe' });
   assert.equal(ok.wikiUserId, 42n);
   assert.equal(ok.userPageUrl, 'https://meta.wikimedia.org/wiki/User:Jane_Doe');
+});
+
+test('sign-in asks Wikimedia for identity only, with PKCE', () => {
+  const url = new URL(buildAuthorizeUrl({ state: 's', codeVerifier: 'v'.repeat(43) }));
+  // The grant of an identity-only consumer; any other scope would be dropped.
+  assert.equal(url.searchParams.get('scope'), 'mwoauth-authonly');
+  assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
+  assert.ok(url.searchParams.get('code_challenge'));
 });

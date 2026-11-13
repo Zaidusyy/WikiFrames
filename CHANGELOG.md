@@ -15,6 +15,11 @@ uses [Semantic Versioning](https://semver.org/).
 - `CLIENT_IP_HIDDEN` for hosts that hide visitor addresses: per-visitor
   rate limits become shared, event-sized ones.
 
+### Fixed
+- Sign-in asked Wikimedia for the `basic` scope, which an identity-only
+  OAuth consumer does not have and MediaWiki silently drops. It now asks
+  for `mwoauth-authonly`, that consumer's grant.
+
 ### Security
 - Next.js 15.5.28, which fixes an unauthenticated remote code execution in
   the image optimizer (GHSA-2464-fhr4-w9xw; WikiFrames turns the optimizer

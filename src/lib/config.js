@@ -48,8 +48,10 @@ export const config = {
       'https://meta.wikimedia.org/w/rest.php/oauth2/resource/profile',
     clientId: process.env.WIKIMEDIA_CLIENT_ID || '',
     clientSecret: process.env.WIKIMEDIA_CLIENT_SECRET || '',
-    // AUTH-1: identity only. We never request write scopes (SEC-1).
-    scope: process.env.WIKIMEDIA_SCOPE || 'basic',
+    // AUTH-1: identity only. We never request write scopes (SEC-1). This is
+    // the grant of a consumer registered as "User identity verification only";
+    // MediaWiki silently drops any scope the consumer was not granted.
+    scope: process.env.WIKIMEDIA_SCOPE || 'mwoauth-authonly',
   },
 
   cookies: {
