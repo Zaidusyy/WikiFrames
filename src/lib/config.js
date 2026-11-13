@@ -90,6 +90,12 @@ export const config = {
   // entirely client-controlled.
   trustProxyHops: intFromEnv('TRUST_PROXY_HOPS', 1, { min: 0, max: 10 }),
 
+  // Some hosts hide visitor addresses from the app on purpose — Toolforge's
+  // front proxy does, for privacy, and throttles each real address itself. Then
+  // every request appears to come from one address, and per-address limits
+  // become shared ones (see perIpLimit in api.js).
+  clientIpHidden: process.env.CLIENT_IP_HIDDEN === 'true',
+
   limits: {
     // LINK-5. Per IP per campaign. Event venues put hundreds of people behind
     // one NAT address, so this is deliberately generous — and photos that are

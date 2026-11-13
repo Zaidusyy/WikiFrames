@@ -4,6 +4,17 @@ All notable changes to WikiFrames. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Toolforge deployment**: runs on the Toolforge Build Service with ToolsDB.
+  `scripts/toolforge.mjs` wires up ToolsDB, the tool's data directory, fonts
+  and the port; `Procfile` and `project.toml` configure the build.
+- MariaDB/MySQL support alongside PostgreSQL (`scripts/prisma.mjs`), with
+  case-sensitive collation so tokens and usernames compare exactly.
+- `CLIENT_IP_HIDDEN` for hosts that hide visitor addresses: per-visitor
+  rate limits become shared, event-sized ones.
+
 ## [0.2.0] — 2026-10-20
 
 ### Added

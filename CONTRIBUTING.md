@@ -17,7 +17,7 @@ code, design, translations, documentation and bug reports are all welcome.
 
 ## Getting started
 
-Requirements: Node.js 20.9 or newer. Nothing else.
+Requirements: Node.js 20.9 – 24 (an LTS release). Nothing else.
 
 ```bash
 npm install

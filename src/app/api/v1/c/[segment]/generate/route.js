@@ -7,6 +7,7 @@ import {
   handler,
   notFound,
   ok,
+  perIpLimit,
   rateKeyForIp,
   readForm,
 } from '@/lib/api';
@@ -50,7 +51,7 @@ export const POST = handler(async (req, { params }) => {
   // LINK-5: the flow is open by design, so the throttle is what stands between
   // a public link and someone scripting it.
   const ipKey = rateKeyForIp(clientIp(req));
-  enforce(`gen:${campaign.id}:${ipKey}`, config.limits.generatePerHourPerIp);
+  enforce(`gen:${campaign.id}:${ipKey}`, perIpLimit(config.limits.generatePerHourPerIp));
 
   const form = await readForm(req, config.limits.photoUploadBytes + 64 * 1024);
   assertAccessCode(campaign, form.get('accessCode'), ipKey);

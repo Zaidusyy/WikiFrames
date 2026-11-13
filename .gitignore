@@ -75,3 +75,6 @@ docs/
 .next-dev.log
 .pgdata-server.log
 *.err
+
+# Prisma schema variants written by scripts/prisma.mjs
+prisma/generated/

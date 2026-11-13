@@ -75,6 +75,19 @@ export function clientIp(req) {
   return req.headers.get('x-real-ip') || '0.0.0.0';
 }
 
+// A venue's worth of people: how many visitors a per-address budget stands for
+// when the host hides addresses and all of them share one bucket.
+const SHARED_ADDRESS_FACTOR = 50;
+
+/**
+ * Budget for a per-address rate limit. Where visitor addresses are hidden
+ * (config.clientIpHidden) one bucket holds everybody, so it is scaled up to a
+ * whole event instead of locking the event out after one person's allowance.
+ */
+export function perIpLimit(limit) {
+  return config.clientIpHidden ? limit * SHARED_ADDRESS_FACTOR : limit;
+}
+
 /**
  * Rate-limit bucket for an address. An IPv6 client usually controls a whole
  * /64, so counting each of its 2^64 addresses separately would make the limit

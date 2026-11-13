@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { clientIp, handler, notFound, ok, rateKeyForIp } from '@/lib/api';
+import { clientIp, handler, notFound, ok, perIpLimit, rateKeyForIp } from '@/lib/api';
 import { enforce } from '@/lib/ratelimit';
 import { assetUrl, destroyAsset } from '@/lib/storage';
 
@@ -13,7 +13,7 @@ const TOKEN = /^[A-Za-z0-9_-]{24,64}$/;
 
 function throttle(req) {
   // 192-bit tokens cannot be guessed, but there is no reason to let anyone try.
-  enforce(`deletion:${rateKeyForIp(clientIp(req))}`, 120);
+  enforce(`deletion:${rateKeyForIp(clientIp(req))}`, perIpLimit(120));
 }
 
 export const GET = handler(async (req, { params }) => {

@@ -67,7 +67,7 @@ instance's `/privacy` page.
 
 ## Quick start (development)
 
-Requirements: **Node.js 20.9+**. Nothing else — the database comes with it.
+Requirements: **Node.js 20.9 – 24** (an LTS release). Nothing else — the database comes with it.
 
 ```bash
 npm install
@@ -118,9 +118,55 @@ npm ci && npm run build && npm start
 ```
 
 Run behind a reverse proxy, set `TRUST_PROXY_HOPS`, and use a managed
-PostgreSQL. On Wikimedia Cloud VPS a Trove PostgreSQL instance works well;
-Toolforge's ToolsDB is MariaDB, so a Toolforge deployment needs PostgreSQL
-from elsewhere.
+PostgreSQL — or MariaDB/MySQL: give a `mysql://` `DATABASE_URL` (or set
+`DATABASE_PROVIDER=mysql` for the build) and `scripts/prisma.mjs` builds the
+database client for it.
+
+### Toolforge
+
+WikiFrames runs on [Toolforge](https://wikitech.wikimedia.org/wiki/Help:Toolforge)
+with the Build Service and ToolsDB (MariaDB); `Procfile`, `project.toml` and
+`scripts/toolforge.mjs` do the Toolforge-specific work. Once you are a
+Toolforge member and have created a tool (here `wikiframes`):
+
+1. Register an [OAuth 2.0 consumer](https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration/propose/oauth2)
+   — identity only ("User identity verification only"), callback
+   `https://wikiframes.toolforge.org/api/v1/auth/wikimedia/callback`.
+2. On `login.toolforge.org`, `become wikiframes`, then create the database
+   once (the name must start with your tool's ToolsDB user, shown by
+   `grep user ~/replica.my.cnf`):
+
+   ```sql
+   sql tools
+   CREATE DATABASE s12345__wikiframes CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+   ```
+3. Store the settings (each command prompts for the value):
+
+   ```bash
+   toolforge envvars create APP_BASE_URL       # https://wikiframes.toolforge.org
+   toolforge envvars create APP_SECRET         # openssl rand -hex 32
+   toolforge envvars create WIKIMEDIA_CLIENT_ID
+   toolforge envvars create WIKIMEDIA_CLIENT_SECRET
+   toolforge envvars create WIKIMEDIA_CONTACT  # e.g. https://wikiframes.toolforge.org or your user page
+   ```
+4. Build and start:
+
+   ```bash
+   toolforge build start https://gitlab.wikimedia.org/toolforge-repos/wikiframes
+   toolforge webservice buildservice start --mount=all
+   ```
+
+   After each new build: `toolforge webservice restart`. Logs:
+   `toolforge webservice buildservice logs -f`.
+
+On every start the launcher points the app at ToolsDB, keeps frames and
+gallery images in the tool's data directory (readable by the tool only),
+creates the tables with case-sensitive collation on first run, applies the
+schema and loads the starter templates. Toolforge's proxy hides visitors' IP
+addresses from tools by design, so it also sets `CLIENT_IP_HIDDEN=true`:
+per-visitor rate limits become event-sized shared ones, and wrong venue codes
+are counted per campaign. The retention job runs inside the web service; no
+cron job is needed.
 
 ### Configuration
 
@@ -128,7 +174,7 @@ from elsewhere.
 |---|---|---|
 | `APP_BASE_URL` | yes (https) | Public URL of the instance |
 | `APP_SECRET` | yes (32+ chars) | Signs participants' short-lived image links |
-| `DATABASE_URL` | yes | PostgreSQL connection |
+| `DATABASE_URL` | yes | PostgreSQL or MariaDB/MySQL connection |
 | `WIKIMEDIA_CLIENT_ID` / `_SECRET` | yes | [OAuth 2.0 consumer](https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration/propose/oauth2), identity scope, callback `<APP_BASE_URL>/api/v1/auth/wikimedia/callback` |
 | `WIKIMEDIA_CONTACT` | recommended | Contact for Wikimedia's User-Agent policy |
 | `SUPER_ADMIN_USERNAMES` | — | Platform admins, checked at every sign-in |
@@ -136,6 +182,7 @@ from elsewhere.
 | `RETENTION_SCHEDULER`, `RETENTION_INTERVAL_MINUTES` | — | In-process purge (default on, hourly) |
 | `CRON_SECRET` | if using cron | Bearer token for `POST /api/v1/cron/retention` / `npm run purge` |
 | `TRUST_PROXY_HOPS` | — | Reverse proxies in front of the app (default 1) |
+| `CLIENT_IP_HIDDEN` | — | `true` where the host hides visitor IPs (Toolforge; set by the launcher) |
 | `STORAGE_DRIVER` | — | `local` (default) or `s3` (+ `S3_*`, `npm i @aws-sdk/client-s3`) |
 | `RATE_LIMIT_GENERATE_PER_HOUR` | — | Server renders per IP per campaign (default 60) |
 
@@ -183,6 +230,12 @@ reduced-motion support, alt text on every image — and the Health Check makes
 the frames themselves meet WCAG 2.1 AA contrast.
 
 ## Contributing
+
+The code lives on [GitHub](https://github.com/Zaidusyy/WikiFrames); an exact
+copy on [Wikimedia GitLab](https://gitlab.wikimedia.org/zaidusyy/wikiframes)
+is updated by CI after every green build of `main` and every release tag,
+and is what Toolforge builds from. Please open issues and pull requests on
+GitHub — changes made directly on GitLab would stop the copy.
 
 Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
 and the [Code of Conduct](CODE_OF_CONDUCT.md). Please report security problems

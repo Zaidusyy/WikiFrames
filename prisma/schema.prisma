@@ -1,6 +1,11 @@
-// WikiFrames — PostgreSQL schema (PDR §19).
-// Every model carries id/created_at/updated_at. JSONB is used for canvas layer
+// WikiFrames — database schema (PDR §19).
+// Every model carries id/created_at/updated_at. JSON is used for canvas layer
 // state and analytics meta so the relational core stays clean.
+//
+// Written for PostgreSQL and also run on MariaDB/MySQL (Toolforge's ToolsDB):
+// scripts/prisma.mjs swaps the provider below. Strings that can be longer than
+// MySQL's default VARCHAR(191) carry an explicit @db type, which PostgreSQL
+// treats identically to its default text.
 
 generator client {
   provider = "prisma-client-js"
@@ -35,7 +40,7 @@ model User {
   id           String       @id @default(uuid())
   wikiUserId   BigInt       @unique @map("wiki_user_id")
   wikiUsername String       @map("wiki_username")
-  userPageUrl  String?      @map("user_page_url")
+  userPageUrl  String?      @map("user_page_url") @db.Text
   userGroup    String?      @map("user_group")
   capacity     Capacity     @default(organizer)
   logoAssetId  String?      @map("logo_asset_id")
@@ -86,11 +91,11 @@ model Campaign {
   ownerId              String         @map("owner_id")
   name                 String
   slug                 String         @unique
-  description          String         @default("")
+  description          String         @default("") @db.Text
   eventDate            DateTime       @map("event_date")
   eventEndDate         DateTime       @map("event_end_date")
   registrationOpenDate DateTime       @map("registration_open_date")
-  location             String?
+  location             String?        @db.Text
   organizingGroup      String?        @map("organizing_group")
   status               CampaignStatus @default(draft)
   publicGallery        Boolean        @default(false) @map("public_gallery")
@@ -150,7 +155,7 @@ model Template {
   aspectRatio         String         @default("1:1") @map("aspect_ratio")
   canvasJson          Json?          @map("canvas_json")
   frameAssetId        String?        @map("frame_asset_id")
-  commonsUrl          String?        @map("commons_url")
+  commonsUrl          String?        @map("commons_url") @db.Text
   commonsAttribution  Json?          @map("commons_attribution")
   editable            Boolean        @default(true)
   sortOrder           Int            @default(0) @map("sort_order")
@@ -172,7 +177,7 @@ model EventTemplatePreset {
   id              String   @id @default(uuid())
   key             String   @unique
   name            String
-  blurb           String   @default("")
+  blurb           String   @default("") @db.Text
   theme           Json
   defaultCaptions Json     @map("default_captions")
   defaultRoles    Json     @map("default_roles")
@@ -201,8 +206,8 @@ model CampaignRole {
 model Caption {
   id          String   @id @default(uuid())
   campaignId  String   @map("campaign_id")
-  text        String
-  hashtags    String   @default("")
+  text        String   @db.Text
+  hashtags    String   @default("") @db.Text
   isMandatory Boolean  @default(false) @map("is_mandatory")
   sort        Int      @default(0)
   createdAt   DateTime @default(now()) @map("created_at")

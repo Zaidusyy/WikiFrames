@@ -1,4 +1,4 @@
-import { clientIp, handler, ok, rateKeyForIp } from '@/lib/api';
+import { clientIp, handler, ok, perIpLimit, rateKeyForIp } from '@/lib/api';
 import { enforce } from '@/lib/ratelimit';
 import { participantPayload, recordEvent, resolveCampaignByLink } from '@/lib/participant';
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 // credential, and the campaign's lifecycle state decides what comes back.
 export const GET = handler(async (req, { params }) => {
   const { segment } = await params;
-  enforce(`payload:${rateKeyForIp(clientIp(req))}`, 600);
+  enforce(`payload:${rateKeyForIp(clientIp(req))}`, perIpLimit(600));
   const campaign = await resolveCampaignByLink(segment);
 
   const via = new URL(req.url).searchParams.get('via');

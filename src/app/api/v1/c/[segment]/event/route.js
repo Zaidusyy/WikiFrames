@@ -1,4 +1,4 @@
-import { clientIp, handler, ok, rateKeyForIp, readJson } from '@/lib/api';
+import { clientIp, handler, ok, perIpLimit, rateKeyForIp, readJson } from '@/lib/api';
 import { consume } from '@/lib/ratelimit';
 import { recordEvent, resolveCampaignByLink } from '@/lib/participant';
 
@@ -18,7 +18,7 @@ export const POST = handler(async (req, { params }) => {
   const { segment } = await params;
 
   // Beacons are cheap but must not become a write amplifier for a public URL.
-  const { allowed } = consume(`beacon:${segment.slice(-22)}:${rateKeyForIp(clientIp(req))}`, 200);
+  const { allowed } = consume(`beacon:${segment.slice(-22)}:${rateKeyForIp(clientIp(req))}`, perIpLimit(200));
   if (!allowed) return ok({ recorded: false });
 
   const campaign = await resolveCampaignByLink(segment);

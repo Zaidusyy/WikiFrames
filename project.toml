@@ -1,0 +1,14 @@
+# Toolforge Build Service (Cloud Native Buildpacks) settings.
+# The Docker image does not read this file; see the Dockerfile for that.
+[_]
+schema-version = "0.2"
+
+# Build the database client for ToolsDB (MariaDB) instead of PostgreSQL.
+[[io.buildpacks.build.env]]
+name = "DATABASE_PROVIDER"
+value = "mysql"
+
+# Fonts for server-rendered role badges: Latin plus the scripts of the
+# movement's largest communities, and colour emoji (badges end in one).
+[com.heroku.buildpacks.deb-packages]
+install = ["fonts-noto-core", "fonts-noto-color-emoji", "fonts-noto-cjk"]

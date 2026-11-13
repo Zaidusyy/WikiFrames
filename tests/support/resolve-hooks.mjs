@@ -38,5 +38,8 @@ export async function resolve(specifier, context, nextResolve) {
     const found = withExtension(path.resolve(base, specifier));
     if (found) return asModule(found, context, nextResolve);
   }
+  // Next.js ships its entry points ("next/server") as CommonJS files without
+  // an exports map, which webpack finds and Node's ESM loader does not.
+  if (/^next\/[a-z-]+$/.test(specifier)) return nextResolve(`${specifier}.js`, context);
   return nextResolve(specifier, context);
 }

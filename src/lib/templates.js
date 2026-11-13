@@ -1,4 +1,4 @@
-import { prisma } from './db';
+import { jsonPath, prisma } from './db';
 
 /**
  * Whether any template still needs a frame asset — as its current frame, or
@@ -10,7 +10,7 @@ export async function isFrameAssetInUse(assetId) {
   if (!assetId) return false;
   const [asFrame, asBase] = await Promise.all([
     prisma.template.count({ where: { frameAssetId: assetId } }),
-    prisma.template.count({ where: { canvasJson: { path: ['baseFrameAssetId'], equals: assetId } } }),
+    prisma.template.count({ where: { canvasJson: { path: jsonPath('baseFrameAssetId'), equals: assetId } } }),
   ]);
   return asFrame + asBase > 0;
 }

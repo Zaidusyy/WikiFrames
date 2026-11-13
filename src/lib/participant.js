@@ -42,14 +42,17 @@ const CODE_WINDOW_MS = 15 * 60 * 1000;
  * Ten thousand possible codes is nothing to a script, so wrong guesses are
  * counted per address *and* per campaign. Once either budget is spent, even a
  * correct code is refused until the window resets — otherwise the limit would
- * only slow an attacker down, not stop them.
+ * only slow an attacker down, not stop them. Where the host hides visitor
+ * addresses there is no per-address budget to keep, only the campaign's.
  */
 export function assertAccessCode(campaign, provided, ipKey) {
   if (!campaign.accessCode) return;
 
-  const ipBucket = `code-fail:${campaign.id}:${ipKey}`;
+  const ipBucket = config.clientIpHidden ? null : `code-fail:${campaign.id}:${ipKey}`;
   const campaignBucket = `code-fail:${campaign.id}`;
-  const ipState = peek(ipBucket, config.limits.accessCodeFailuresPerIp);
+  const ipState = ipBucket
+    ? peek(ipBucket, config.limits.accessCodeFailuresPerIp)
+    : { allowed: true, retryAfterSeconds: 0 };
   const campaignState = peek(campaignBucket, config.limits.accessCodeFailuresPerCampaign);
   if (!ipState.allowed || !campaignState.allowed) {
     const wait = Math.max(ipState.retryAfterSeconds, campaignState.retryAfterSeconds);
@@ -61,7 +64,7 @@ export function assertAccessCode(campaign, provided, ipKey) {
 
   const code = String(provided ?? '').trim();
   if (!code || !safeEqual(code, campaign.accessCode)) {
-    consume(ipBucket, config.limits.accessCodeFailuresPerIp, CODE_WINDOW_MS);
+    if (ipBucket) consume(ipBucket, config.limits.accessCodeFailuresPerIp, CODE_WINDOW_MS);
     consume(campaignBucket, config.limits.accessCodeFailuresPerCampaign, CODE_WINDOW_MS);
     throw forbidden('That access code is not right. Check the code shown at the venue.');
   }

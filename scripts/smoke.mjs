@@ -182,7 +182,9 @@ async function main() {
 
   console.log('\nAbuse resistance');
   let throttled = false;
-  for (let i = 0; i < 35 && !throttled; i += 1) {
+  // Per address after 30 guesses; per campaign after 300 where the host hides
+  // addresses (CLIENT_IP_HIDDEN, Toolforge).
+  for (let i = 0; i < 320 && !throttled; i += 1) {
     const r = await call(`/api/v1/c/${segment}/unlock`, { method: 'POST', body: { accessCode: String(1000 + i) }, auth: false });
     throttled = r.status === 429;
   }
