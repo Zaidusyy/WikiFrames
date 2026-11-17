@@ -152,8 +152,9 @@ Toolforge member and have created a tool (here `wikiframes`):
 4. Build and start:
 
    ```bash
-   toolforge build start https://gitlab.wikimedia.org/toolforge-repos/wikiframes
-   toolforge webservice buildservice start --mount=all
+   toolforge build start https://gitlab.wikimedia.org/zaidusyy/wikiframes.git \
+     --ref main --envvar DATABASE_PROVIDER=mysql
+   toolforge webservice buildservice start --mount=all --mem 1Gi
    ```
 
    After each new build: `toolforge webservice restart`. Logs:

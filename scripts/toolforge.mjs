@@ -49,6 +49,21 @@ if (!env.DATABASE_URL) {
   env.DATABASE_URL = `mysql://${auth}@${host}:${port}/${databaseName}?connection_limit=5`;
 }
 
+// The database client is generated at build time for one database. Toolforge's
+// build service does not apply the build environment in project.toml, so a
+// build started without `--envvar DATABASE_PROVIDER=mysql` targets PostgreSQL
+// and cannot talk to ToolsDB. Say so plainly instead of failing on first query.
+if (/^(mysql|mariadb):/i.test(env.DATABASE_URL)) {
+  const generated = path.join(root, 'node_modules', '.prisma', 'client', 'schema.prisma');
+  const schema = fs.existsSync(generated) ? fs.readFileSync(generated, 'utf8') : '';
+  if (!/provider\s*=\s*"mysql"/.test(schema)) {
+    fail(
+      'This build has no MariaDB client. Rebuild with:\n' +
+        '  toolforge build start <repository URL> --envvar DATABASE_PROVIDER=mysql'
+    );
+  }
+}
+
 // ── storage: the tool's NFS directory ───────────────────────────────────────
 // Frames and gallery images must outlive a restart, so the container's own
 // filesystem will not do. Start the web service with --mount=all.

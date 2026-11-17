@@ -4,6 +4,8 @@
 schema-version = "0.2"
 
 # Build the database client for ToolsDB (MariaDB) instead of PostgreSQL.
+# Honoured by `pack`; Toolforge's build service ignores it, so pass
+# `--envvar DATABASE_PROVIDER=mysql` to `toolforge build start` as well.
 [[io.buildpacks.build.env]]
 name = "DATABASE_PROVIDER"
 value = "mysql"
