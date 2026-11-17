@@ -131,7 +131,7 @@ export const config = {
 
   // Wikimedia's User-Agent policy asks every client for a way to reach its
   // operator: https://meta.wikimedia.org/wiki/User-Agent_policy
-  userAgent: `WikiFrames/0.2 (${process.env.WIKIMEDIA_CONTACT || 'https://github.com/Zaidusyy/WikiFrames'})`,
+  userAgent: `WikiFrames/0.3 (${process.env.WIKIMEDIA_CONTACT || 'https://github.com/Zaidusyy/WikiFrames'})`,
 
   // AUTH-6 forbids insecure fallbacks. This switch exists purely so contributors
   // can run the product before a Meta-Wiki consumer is registered; it is refused

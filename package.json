@@ -1,6 +1,6 @@
 {
   "name": "wikiframes",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Privacy-first campaign frame and photo-badge generator for the Wikimedia movement and any open community",
   "license": "MIT",

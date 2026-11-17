@@ -4,7 +4,7 @@ All notable changes to WikiFrames. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] — 2026-11-18
 
 ### Added
 - **Toolforge deployment**: runs on the Toolforge Build Service with ToolsDB.
@@ -19,6 +19,10 @@ uses [Semantic Versioning](https://semver.org/).
 - React and React DOM 19.3.1, updated together. Dependabot now proposes
   linked packages (React, Next.js, Prisma) in one pull request and leaves
   their major versions to planned migrations.
+- Next.js 15.5.29, PostCSS 8.5.32, Autoprefixer 10.6.2, and
+  `actions/checkout` and `actions/setup-node` v7 in CI.
+- CI also tests Node.js 24, and pushes green builds of `main` and release
+  tags to Wikimedia GitLab.
 
 ### Fixed
 - Sign-in asked Wikimedia for the `basic` scope, which an identity-only
@@ -26,7 +30,7 @@ uses [Semantic Versioning](https://semver.org/).
   for `mwoauth-authonly`, that consumer's grant.
 
 ### Security
-- Next.js 15.5.28, which fixes an unauthenticated remote code execution in
+- Next.js 15.5.29. 15.5.28 fixes an unauthenticated remote code execution in
   the image optimizer (GHSA-2464-fhr4-w9xw; WikiFrames turns the optimizer
   off) and a denial of service in Server Actions (GHSA-p3m5-59mp-jv5r).
 
