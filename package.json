@@ -64,7 +64,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",
-    "@electric-sql/pglite-socket": "^0.2.7",
+    "@electric-sql/pglite-socket": "^0.2.20",
     "autoprefixer": "^10.6.2",
     "eslint": "^8.57.1",
     "eslint-config-next": "15.5.29",
